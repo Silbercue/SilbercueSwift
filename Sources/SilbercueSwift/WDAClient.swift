@@ -145,31 +145,50 @@ actor WDAClient {
     func restartWDA(simulator: String = "booted") async throws {
         let bid = backend.bundleId
         // Kill any lingering WDA process
-        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, bid)
-        // Brief pause for clean shutdown
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-        // Relaunch WDA
-        let result = try await Shell.xcrun("simctl", "launch", simulator, bid)
+        let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, bid)
+
+        // Clean up port 8100 — prevents binding conflicts when old WDA left the port occupied.
+        // This was previously only done in deploySilbercueWDA, causing restartWDA to fail silently.
+        await cleanupPort8100()
+
+        // Pause for clean shutdown and port release (0.5s was too short for TIME_WAIT)
+        try await Task.sleep(nanoseconds: 1_000_000_000) // 1s
+
+        // Relaunch WDA with explicit timeout
+        let result = try await Shell.xcrun(timeout: 10, "simctl", "launch", simulator, bid)
         guard result.succeeded else {
             throw WDAError.wdaRestart("Failed to restart \(backend.displayName): \(result.stderr)")
         }
-        // Wait for WDA to become ready (poll up to 8s)
-        for _ in 0..<16 {
+        // Wait for WDA to become ready (poll up to 10s)
+        for _ in 0..<20 {
             try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
             if await isHealthy() {
-                sessionId = nil // Force new session after restart
+                sessionId = nil
+                knownSessionIds.removeAll() // All old sessions are invalid after restart
                 return
             }
         }
-        throw WDAError.wdaRestart("\(backend.displayName) did not become ready within 8s after restart")
+        throw WDAError.wdaRestart("\(backend.displayName) did not become ready within 10s after restart")
+    }
+
+    /// Kill any process holding port 8100 to prevent binding conflicts.
+    private func cleanupPort8100() async {
+        if let result = try? await Shell.run("/usr/bin/lsof", arguments: ["-ti", ":8100"], timeout: 5),
+           result.succeeded, !result.stdout.isEmpty {
+            for pidStr in result.stdout.split(separator: "\n") {
+                if let pid = Int32(pidStr.trimmingCharacters(in: .whitespaces)) {
+                    kill(pid, SIGKILL)
+                }
+            }
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s for port release
+        }
     }
 
     /// Kill any WDA process on port 8100 and terminate known runners.
     private func cleanupWDAProcesses(simulator: String) async {
-        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, WDABackend.silbercueWDA.bundleId)
-        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, WDABackend.originalWDA.bundleId)
-        let _ = try? await Shell.run("/bin/zsh", arguments: ["-c", "lsof -ti :8100 | xargs kill 2>/dev/null"], timeout: 5)
-        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s settle time
+        let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, WDABackend.silbercueWDA.bundleId)
+        let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, WDABackend.originalWDA.bundleId)
+        await cleanupPort8100()
     }
 
     /// Deploy SilbercueWDA to the simulator: build-for-testing + start via xcodebuild test.

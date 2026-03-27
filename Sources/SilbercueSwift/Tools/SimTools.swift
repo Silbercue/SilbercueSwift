@@ -174,6 +174,11 @@ enum SimTools {
         do {
             let udid = try await resolveSimulator(sim)
             let result = try await Shell.xcrun("simctl", "install", udid, appPath)
+
+            // Invalidate WDA session — reinstalled app binary makes the old session stale.
+            // Stale sessions accumulate and eventually crash WDA after multiple install cycles.
+            try? await WDAClient.shared.deleteSession()
+
             return result.succeeded ? .ok("App installed on \(udid)") : .fail("Install failed: \(result.stderr)")
         } catch {
             return .fail("Error: \(error)")
@@ -224,6 +229,11 @@ enum SimTools {
         do {
             let udid = try await resolveSimulator(sim)
             let result = try await Shell.xcrun("simctl", "terminate", udid, bundleId)
+
+            // Invalidate WDA session — the terminated app may have been the session target.
+            // Keeping a stale session causes WDA instability over multiple terminate cycles.
+            try? await WDAClient.shared.deleteSession()
+
             return result.succeeded ? .ok("Terminated \(bundleId)") : .fail("Terminate failed: \(result.stderr)")
         } catch {
             return .fail("Error: \(error)")
