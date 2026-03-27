@@ -164,18 +164,34 @@ actor WDAClient {
         throw WDAError.wdaRestart("\(backend.displayName) did not become ready within 8s after restart")
     }
 
+    /// Kill any WDA process on port 8100 and terminate known runners.
+    private func cleanupWDAProcesses(simulator: String) async {
+        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, WDABackend.silbercueWDA.bundleId)
+        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, WDABackend.originalWDA.bundleId)
+        let _ = try? await Shell.run("/bin/zsh", arguments: ["-c", "lsof -ti :8100 | xargs kill 2>/dev/null"], timeout: 5)
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s settle time
+    }
+
     /// Deploy SilbercueWDA to the simulator: build-for-testing + start via xcodebuild test.
     /// Returns true if deploy succeeded and server is healthy, false otherwise.
-    /// Guarded against concurrent deploys — returns false if a deploy is already in progress.
+    /// If a deploy is already in progress, waits for it instead of starting a new one.
     func deploySilbercueWDA(simulator: String = "booted") async -> Bool {
-        // Guard against concurrent deploys
-        guard !isDeploying else { return false }
+        // H3 fix: If another deploy is in progress, wait for it instead of triggering premature fallback
+        if isDeploying {
+            for _ in 1...15 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if await isHealthy() { return true }
+            }
+            return false
+        }
+
         isDeploying = true
         defer { isDeploying = false }
 
-        // Cancel any leftover deploy task from a previous attempt
+        // H2 fix: Kill lingering processes before deploy (not just Task.cancel)
         deployTask?.cancel()
         deployTask = nil
+        await cleanupWDAProcesses(simulator: simulator)
 
         // Find SilbercueWDA project — check env var first, then common relative location
         let projectDir: String
@@ -256,18 +272,10 @@ actor WDAClient {
     }
 
     /// Health-check with auto-restart and fallback chain.
-    /// 1. Check if current backend is healthy → return
-    /// 2. Try restart current backend → return
-    /// 3. If SilbercueWDA: try deploy → return
-    /// 4. If SilbercueWDA: fallback to Original WDA → try restart → return
-    /// 5. Throw: no backend available
+    /// Always tries in fixed order: healthy? → restart current → deploy SilbercueWDA → fallback Original WDA.
+    /// H1 fix: Backend state is only updated AFTER confirming which backend is actually running.
     func ensureWDARunning(simulator: String = "booted") async throws {
-        // If we previously fell back, try SilbercueWDA again (transient failures shouldn't be permanent)
-        if backend == .originalWDA && fallbackInfo != nil {
-            setBackend(.silbercueWDA)
-        }
-
-        // 1. Already healthy? Done.
+        // 1. Already healthy? Done — whatever backend is active, it works.
         if await isHealthy() { return }
 
         // 2. Try restarting current backend
@@ -278,26 +286,25 @@ actor WDAClient {
             // Restart failed, continue with fallback chain
         }
 
-        // 3. If SilbercueWDA: try full deploy
-        if backend == .silbercueWDA {
-            if await deploySilbercueWDA(simulator: simulator) {
-                sessionId = nil
-                return
-            }
-
-            // 4. Deploy failed → fallback to Original WDA
-            setBackend(.originalWDA)
-            fallbackInfo = "SilbercueWDA not available — using Original WDA as fallback"
+        // 3. Always try SilbercueWDA deploy (preferred backend)
+        backend = .silbercueWDA
+        fallbackInfo = nil
+        if await deploySilbercueWDA(simulator: simulator) {
             sessionId = nil
+            return
+        }
 
-            // Try Original WDA health check + restart
-            if await isHealthy() { return }
-            do {
-                try await restartWDA(simulator: simulator)
-                return
-            } catch {
-                // Original WDA also failed
-            }
+        // 4. SilbercueWDA deploy failed → fallback to Original WDA
+        backend = .originalWDA
+        fallbackInfo = "SilbercueWDA not available — using Original WDA as fallback"
+        sessionId = nil
+
+        if await isHealthy() { return }
+        do {
+            try await restartWDA(simulator: simulator)
+            return
+        } catch {
+            // Original WDA also failed
         }
 
         // 5. Nothing works
