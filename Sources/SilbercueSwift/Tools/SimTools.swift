@@ -109,8 +109,15 @@ enum SimTools {
 
     // MARK: - Resolve simulator name to UDID
 
+    private static let uuidPattern = try! NSRegularExpression(
+        pattern: "^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$",
+        options: .caseInsensitive
+    )
+
     static func resolveSimulator(_ nameOrUDID: String) async throws -> String {
-        if nameOrUDID.count > 30 && nameOrUDID.contains("-") { return nameOrUDID }
+        if uuidPattern.firstMatch(in: nameOrUDID, range: NSRange(nameOrUDID.startIndex..., in: nameOrUDID)) != nil {
+            return nameOrUDID
+        }
         if nameOrUDID == "booted" { return "booted" }
 
         let result = try await Shell.xcrun("simctl", "list", "devices", "-j")
@@ -120,15 +127,19 @@ enum SimTools {
             throw NSError(domain: "SimTools", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse simulator list"])
         }
 
+        // Exact match first, then prefix match — never substring match (prevents wrong simulator for destructive ops)
+        var prefixMatch: String?
         for (_, devices) in deviceGroups {
             for device in devices {
-                if let name = device["name"] as? String,
-                   let udid = device["udid"] as? String,
-                   name.lowercased().contains(nameOrUDID.lowercased()) {
-                    return udid
+                guard let name = device["name"] as? String,
+                      let udid = device["udid"] as? String else { continue }
+                if name.lowercased() == nameOrUDID.lowercased() { return udid }
+                if prefixMatch == nil && name.lowercased().hasPrefix(nameOrUDID.lowercased()) {
+                    prefixMatch = udid
                 }
             }
         }
+        if let match = prefixMatch { return match }
         throw NSError(domain: "SimTools", code: 2, userInfo: [NSLocalizedDescriptionKey: "Simulator '\(nameOrUDID)' not found"])
     }
 
@@ -299,13 +310,11 @@ enum SimTools {
             return .fail("Missing required: simulator")
         }
         do {
-            let target = sim == "all" ? "all" : try await resolveSimulator(sim)
+            let target = sim.lowercased() == "all" ? "all" : try await resolveSimulator(sim)
             let result = try await Shell.xcrun(timeout: 30, "simctl", "erase", target)
 
-            // Invalidate WDA session — erased simulator has no apps
-            try? await WDAClient.shared.deleteSession()
-
             if result.succeeded {
+                try? await WDAClient.shared.deleteSession()
                 return .ok("Erased simulator: \(target)")
             }
             if result.stderr.contains("state: Booted") {
@@ -325,10 +334,8 @@ enum SimTools {
             let udid = try await resolveSimulator(sim)
             let result = try await Shell.xcrun(timeout: 30, "simctl", "delete", udid)
 
-            // Invalidate WDA session if we deleted the target simulator
-            try? await WDAClient.shared.deleteSession()
-
             if result.succeeded {
+                try? await WDAClient.shared.deleteSession()
                 return .ok("Deleted simulator: \(udid)")
             }
             return .fail("Delete failed: \(result.stderr)")

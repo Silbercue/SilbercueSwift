@@ -50,7 +50,7 @@ enum VisualTools {
             try FileManager.default.createDirectory(atPath: baselineDir, withIntermediateDirectories: true)
 
             let baselinePath = "\(baselineDir)/\(sanitize(name)).png"
-            let tmpPath = "/tmp/ss-baseline-capture.png"
+            let tmpPath = "/tmp/ss-baseline-\(UUID().uuidString).png"
 
             // Capture screenshot
             let result = try await Shell.xcrun(
@@ -84,12 +84,13 @@ enum VisualTools {
             return .fail("Missing required: name")
         }
         let sim = args?["simulator"]?.stringValue ?? "booted"
-        let threshold = args?["threshold"]?.doubleValue ?? 0.5
+        let threshold = args?["threshold"]?.numberValue ?? 0.5
         let baselineDir = args?["baseline_dir"]?.stringValue ?? defaultBaselineDir
 
+        let runId = UUID().uuidString.prefix(8)
         let baselinePath = "\(baselineDir)/\(sanitize(name)).png"
-        let currentPath = "/tmp/ss-visual-current.png"
-        let diffPath = "/tmp/ss-visual-diff-\(sanitize(name)).png"
+        let currentPath = "/tmp/ss-visual-current-\(runId).png"
+        let diffPath = "/tmp/ss-visual-diff-\(sanitize(name))-\(runId).png"
 
         // Check baseline exists
         guard FileManager.default.fileExists(atPath: baselinePath) else {
@@ -188,12 +189,14 @@ enum VisualTools {
         let cw = current.width, ch = current.height
         let sizeMismatch = bw != cw || bh != ch
 
-        // Use the smaller dimensions for comparison
+        // Use the smaller dimensions for pixel-by-pixel comparison
         let w = min(bw, cw)
         let h = min(bh, ch)
-        let totalPixels = max(bw, cw) * max(bh, ch)
+        // Total pixels = union of both images (larger area covers all pixels that could differ)
+        let largerArea = max(bw * bh, cw * ch)
+        let totalPixels = max(largerArea, w * h)
 
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
         let bytesPerPixel = 4
         let bytesPerRow = w * bytesPerPixel
 
@@ -253,14 +256,12 @@ enum VisualTools {
         let diffPercent = totalPixels > 0 ? Double(changedPixels) / Double(totalPixels) * 100.0 : 0.0
 
         // Create diff image
-        let diffData = Data(diffPixels)
-        let diffImage = diffData.withUnsafeBytes { rawPtr -> CGImage? in
-            guard let baseAddr = rawPtr.baseAddress else { return nil }
-            guard let provider = CGDataProvider(data: Data(bytes: baseAddr, count: diffPixels.count) as CFData) else { return nil }
+        let diffImage: CGImage? = {
+            guard let provider = CGDataProvider(data: Data(diffPixels) as CFData) else { return nil }
             return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32,
                           bytesPerRow: bytesPerRow, space: colorSpace, bitmapInfo: bitmapInfo,
                           provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
-        }
+        }()
 
         return ComparisonResult(diffPercent: diffPercent, changedPixels: changedPixels,
                                 totalPixels: totalPixels, sizeMismatch: sizeMismatch, diffImage: diffImage)
