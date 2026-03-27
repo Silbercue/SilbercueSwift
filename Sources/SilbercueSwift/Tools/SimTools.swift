@@ -187,8 +187,30 @@ enum SimTools {
         let sim = args?["simulator"]?.stringValue ?? "booted"
         do {
             let udid = try await resolveSimulator(sim)
-            let result = try await Shell.xcrun("simctl", "launch", udid, bundleId)
-            return result.succeeded ? .ok("Launched \(bundleId) on \(udid)\n\(result.stdout)") : .fail("Launch failed: \(result.stderr)")
+
+            // Terminate any existing instance first — simctl launch can hang indefinitely
+            // if the app is already running. terminate is fast and idempotent.
+            let termResult = try? await Shell.run("/usr/bin/xcrun",
+                arguments: ["simctl", "terminate", udid, bundleId], timeout: 5)
+            let wasRunning = termResult?.succeeded == true
+            if wasRunning {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s grace period
+            }
+
+            // Launch with hard 15s timeout to prevent hanging
+            let result = try await Shell.run("/usr/bin/xcrun",
+                arguments: ["simctl", "launch", udid, bundleId], timeout: 15)
+
+            if result.succeeded {
+                let note = wasRunning ? " (was running, relaunched)" : ""
+                return .ok("Launched \(bundleId) on \(udid)\(note)\n\(result.stdout)")
+            }
+
+            if result.exitCode == -1 {
+                return .fail("Launch timed out after 15s. The simulator may need a restart.")
+            }
+
+            return .fail("Launch failed: \(result.stderr)")
         } catch {
             return .fail("Error: \(error)")
         }

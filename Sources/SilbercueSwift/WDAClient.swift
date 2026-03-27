@@ -31,6 +31,7 @@ actor WDAClient {
         body: [String: Any]? = nil,
         timeout: TimeInterval? = nil
     ) async throws -> (Data, Int) {
+        let effectiveTimeout = timeout ?? requestTimeout
         let urlString = baseURL + path
         guard let url = URL(string: urlString) else {
             throw WDAError.invalidURL(urlString)
@@ -38,16 +39,36 @@ actor WDAClient {
 
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = timeout ?? requestTimeout
+        req.timeoutInterval = effectiveTimeout
 
         if let body = body {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
-        let (data, response) = try await URLSession.shared.data(for: req)
-        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-        return (data, statusCode)
+        // Freeze request as let for safe capture in task group closures
+        let finalReq = req
+        let finalTimeout = effectiveTimeout
+
+        // Hard timeout wrapper — guarantees we never hang longer than effectiveTimeout.
+        // URLRequest.timeoutInterval only measures idle time between packets, not total duration.
+        // If WDA accepts the connection but never responds, timeoutInterval may never fire.
+        return try await withThrowingTaskGroup(of: (Data, Int).self) { group in
+            group.addTask {
+                let (data, response) = try await URLSession.shared.data(for: finalReq)
+                let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+                return (data, statusCode)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(finalTimeout * 1_000_000_000))
+                throw WDAError.wdaNotResponding
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else {
+                throw WDAError.wdaNotResponding
+            }
+            return result
+        }
     }
 
     private func jsonRequest(
@@ -358,6 +379,10 @@ actor WDAClient {
     // MARK: - View Hierarchy
 
     func getSource(format: String = "json") async throws -> String {
+        // Health check first — getSource bypasses session management, so fail fast if WDA is dead
+        guard await isHealthy() else {
+            throw WDAError.wdaNotResponding
+        }
         let (data, statusCode) = try await request(method: "GET", path: "/source?format=\(format)")
         guard statusCode < 400 else {
             throw WDAError.invalidResponse("Source request failed with status \(statusCode)")

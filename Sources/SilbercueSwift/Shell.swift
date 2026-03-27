@@ -38,6 +38,17 @@ enum Shell {
 
         try process.run()
 
+        // Timeout watchdog — kills the process if it exceeds the allowed time.
+        // Without this, process.waitUntilExit() blocks forever on hung processes.
+        let pid = process.processIdentifier
+        let timeoutNanos = UInt64(timeout * 1_000_000_000)
+        let timeoutTask = Task.detached {
+            try? await Task.sleep(nanoseconds: timeoutNanos)
+            kill(pid, SIGTERM)
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2s grace before SIGKILL
+            kill(pid, SIGKILL)
+        }
+
         // Read output concurrently
         async let stdoutData = stdoutPipe.fileHandleForReading.readToEndAsync()
         async let stderrData = stderrPipe.fileHandleForReading.readToEndAsync()
@@ -45,6 +56,17 @@ enum Shell {
         let (out, err) = try await (stdoutData, stderrData)
 
         process.waitUntilExit()
+        timeoutTask.cancel()
+
+        // Detect killed process (timeout or crash → uncaughtSignal)
+        if process.terminationReason == .uncaughtSignal {
+            let partialOut = String(data: out, encoding: .utf8) ?? ""
+            return ShellResult(
+                stdout: partialOut,
+                stderr: "Process timed out after \(Int(timeout))s and was killed (signal \(process.terminationStatus))",
+                exitCode: -1
+            )
+        }
 
         let stdout = String(data: out, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let stderr = String(data: err, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -52,9 +74,9 @@ enum Shell {
         return ShellResult(stdout: stdout, stderr: stderr, exitCode: process.terminationStatus)
     }
 
-    /// Convenience for xcrun commands
-    static func xcrun(_ arguments: String...) async throws -> ShellResult {
-        try await run("/usr/bin/xcrun", arguments: Array(arguments))
+    /// Convenience for xcrun commands. Accepts an optional timeout (default: 300s).
+    static func xcrun(timeout: TimeInterval = 300, _ arguments: String...) async throws -> ShellResult {
+        try await run("/usr/bin/xcrun", arguments: Array(arguments), timeout: timeout)
     }
 
     /// Convenience for git commands

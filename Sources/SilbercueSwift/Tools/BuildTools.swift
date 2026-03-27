@@ -126,7 +126,8 @@ enum BuildTools {
         return s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }
 
-    /// Resolve a simulator name to its UDID via simctl
+    /// Resolve a simulator name to its UDID via simctl.
+    /// Uses cascading match strategy: exact → case-insensitive → contains (prefer booted).
     private static func resolveSimulatorUDID(name: String) async -> String? {
         guard let result = try? await Shell.xcrun("simctl", "list", "devices", "-j"),
               result.succeeded,
@@ -136,20 +137,38 @@ enum BuildTools {
             return nil
         }
 
-        // Search all runtimes for a device matching the name
+        let nameLower = name.lowercased()
+        var exactMatch: String?
+        var caseInsensitiveMatch: String?
+        var containsMatch: String?
+        var bootedContainsMatch: String?
+
         for (_, deviceList) in devices {
             for device in deviceList {
                 guard let deviceName = device["name"] as? String,
-                      let udid = device["udid"] as? String,
-                      let isAvailable = device["isAvailable"] as? Bool,
-                      isAvailable else { continue }
+                      let udid = device["udid"] as? String else { continue }
+
+                let isAvailable = device["isAvailable"] as? Bool ?? false
+                let isBooted = (device["state"] as? String) == "Booted"
+                let usable = isAvailable || isBooted
+
+                guard usable else { continue }
 
                 if deviceName == name {
-                    return udid
+                    exactMatch = udid
+                } else if exactMatch == nil && deviceName.lowercased() == nameLower {
+                    caseInsensitiveMatch = udid
+                } else if deviceName.lowercased().contains(nameLower) {
+                    if isBooted {
+                        bootedContainsMatch = udid
+                    } else if containsMatch == nil {
+                        containsMatch = udid
+                    }
                 }
             }
         }
-        return nil
+
+        return exactMatch ?? caseInsensitiveMatch ?? bootedContainsMatch ?? containsMatch
     }
 
     /// Resolve the UDID of the currently booted simulator
