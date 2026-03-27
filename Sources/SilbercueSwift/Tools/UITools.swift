@@ -160,16 +160,23 @@ enum UITools {
 
     static func wdaStatus(_ args: [String: Value]?) async -> CallTool.Result {
         let healthy = await WDAClient.shared.isHealthy()
+        let backendName = await WDAClient.shared.backend.displayName
+        let fallback = await WDAClient.shared.fallbackInfo
+
         if healthy {
             do {
                 let status = try await WDAClient.shared.status()
                 let sessionInfo = "Sessions tracked: \(await WDAClient.shared.sessionCount)"
-                return .ok("WDA Status: \(status.ready ? "READY" : "NOT READY")\nBundle: \(status.bundleId)\n\(sessionInfo)")
+                var msg = "WDA Status: \(status.ready ? "READY" : "NOT READY")\nBackend: \(backendName)\nBundle: \(status.bundleId)\n\(sessionInfo)"
+                if let info = fallback {
+                    msg += "\nInfo: \(info)"
+                }
+                return .ok(msg)
             } catch {
                 return .ok("WDA reachable but status parse failed: \(error)")
             }
         } else {
-            return .fail("WDA not responding (health check timeout 2s). Try restarting WDA or the simulator.")
+            return .fail("WDA not responding (health check timeout 2s). Backend: \(backendName). Try restarting WDA or the simulator.")
         }
     }
 
