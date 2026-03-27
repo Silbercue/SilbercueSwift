@@ -1,8 +1,16 @@
 # SilbercueSwift
 
+[![GitHub Release](https://img.shields.io/github/v/release/silbercue/SilbercueSwift)](https://github.com/silbercue/SilbercueSwift/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-published-green)](https://registry.modelcontextprotocol.io)
+[![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
+[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
+
 The fastest, most complete MCP server for iOS development. One Swift binary, 40 tools, zero dependencies.
 
 Built for [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), and any MCP-compatible AI agent.
+
+> **Looking for an XcodeBuildMCP alternative?** SilbercueSwift has everything XcodeBuildMCP does, plus xcresult parsing, WDA UI automation, code coverage, and 44x faster screenshots. [See comparison below](#xcodebuildmcp-vs-silbercueswift).
 
 ## Why SilbercueSwift?
 
@@ -210,6 +218,27 @@ Measured on M3 MacBook Pro, iOS 18.2 Simulator:
 | Simulator list | ~2s | N/A | **0.2s** |
 | Cold start | ~400ms | ~1s | **~50ms** |
 | Binary size | ~50MB | ~200MB | **8.5MB** |
+
+## XcodeBuildMCP vs SilbercueSwift
+
+If you're using [XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (now maintained by Sentry), here's why you might want to switch:
+
+| Capability | XcodeBuildMCP | SilbercueSwift |
+|---|---|---|
+| Build for simulator | Yes | Yes |
+| **Structured test results** | Partial — stderr parsing issues ([#177](https://github.com/getsentry/XcodeBuildMCP/issues/177)) | **Full xcresult JSON parsing** |
+| **Failure screenshots** from xcresult | No | **Auto-exported** |
+| **Code coverage** per file | Basic | **Sorted, filterable by min %** |
+| **Build error diagnosis** with file:line | stderr parsing | **xcresult JSON with sourceURL** |
+| **UI automation** | No | **13 tools — direct WDA** |
+| **Screenshot latency** | 13.2s | **0.3s (44x faster)** |
+| **Console log per failed test** | No | **Optional (`include_console`)** |
+| **Wait for log pattern** | No | **`wait_for_log` with regex + timeout** |
+| Runtime | Node.js (~50MB) | **Native Swift (8.5MB)** |
+| Cold start | ~400ms | **~50ms** |
+| Dependencies | npm ecosystem | **Zero** |
+
+SilbercueSwift addresses the [#1 community complaint](https://github.com/getsentry/XcodeBuildMCP/issues/177) about Xcode MCP servers: AI agents never get useful test output. Instead of parsing 500 lines of xcodebuild stderr, SilbercueSwift reads the `.xcresult` bundle — the same structured data Xcode's Test Navigator uses.
 
 ## Architecture
 
