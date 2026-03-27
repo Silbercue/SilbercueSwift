@@ -12,6 +12,7 @@ enum ToolRegistry {
         tools += GitTools.tools
         tools += ConsoleTools.tools
         tools += TestTools.tools
+        tools += VisualTools.tools
         return tools
     }
 
@@ -72,6 +73,10 @@ enum ToolRegistry {
         case "test_failures":      return await TestTools.testFailures(args)
         case "test_coverage":      return await TestTools.testCoverage(args)
         case "build_and_diagnose": return await TestTools.buildAndDiagnose(args)
+
+        // Visual Regression
+        case "save_visual_baseline": return await VisualTools.saveVisualBaseline(args)
+        case "compare_visual":       return await VisualTools.compareVisual(args)
 
         default:
             return .fail("Unknown tool: \(name)")
