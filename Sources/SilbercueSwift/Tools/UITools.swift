@@ -335,11 +335,13 @@ enum UITools {
                 }
                 try await WDAClient.shared.setValue(elementId: eid, text: text)
             } else {
-                // Type into focused element via keyboard
-                let sid = try await WDAClient.shared.ensureSession()
-                _ = try await WDAClient.shared.findElement(using: "class name", value: "XCUIElementTypeTextField")
-                // Fallback: use W3C actions for keyboard input
-                try await WDAClient.shared.setValue(elementId: sid, text: text)
+                // Find first text field and type into it
+                _ = try await WDAClient.shared.ensureSession()
+                let eid = try await WDAClient.shared.findElement(using: "class name", value: "XCUIElementTypeTextField")
+                if clearFirst {
+                    try await WDAClient.shared.clearElement(elementId: eid)
+                }
+                try await WDAClient.shared.setValue(elementId: eid, text: text)
             }
             return .ok("Typed '\(text)'")
         } catch {
