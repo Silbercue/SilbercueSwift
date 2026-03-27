@@ -5,7 +5,7 @@ let logger = Logger(label: "com.silbercue.mcp")
 
 let server = Server(
     name: "SilbercueSwift",
-    version: "0.1.0",
+    version: "0.3.0",
     capabilities: .init(tools: .init(listChanged: true))
 )
 

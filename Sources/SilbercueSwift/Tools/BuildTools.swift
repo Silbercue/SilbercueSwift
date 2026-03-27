@@ -65,7 +65,27 @@ enum BuildTools {
         let configuration = args?["configuration"]?.stringValue ?? "Debug"
         let isWorkspace = project.hasSuffix(".xcworkspace")
         let projectFlag = isWorkspace ? "-workspace" : "-project"
-        let destination = "platform=iOS Simulator,name=\(simulator)"
+
+        // Build destination string — support UDID, "booted", or device name
+        let destination: String
+        if isUDID(simulator) {
+            destination = "platform=iOS Simulator,id=\(simulator)"
+        } else if simulator == "booted" {
+            // Resolve booted simulator UDID
+            if let udid = await resolveBootedUDID() {
+                destination = "platform=iOS Simulator,id=\(udid)"
+            } else {
+                return .fail("No booted simulator found")
+            }
+        } else {
+            // Try to resolve name to UDID first (handles names with special chars like parentheses)
+            if let udid = await resolveSimulatorUDID(name: simulator) {
+                destination = "platform=iOS Simulator,id=\(udid)"
+            } else {
+                // Fallback: pass name directly and let xcodebuild try
+                destination = "platform=iOS Simulator,name=\(simulator)"
+            }
+        }
 
         var buildArgs = [
             projectFlag, project,
@@ -96,6 +116,61 @@ enum BuildTools {
         } catch {
             return .fail("Build error: \(error)")
         }
+    }
+
+    // MARK: - Simulator Resolution
+
+    /// Check if string looks like a UDID (UUID format)
+    private static func isUDID(_ s: String) -> Bool {
+        let pattern = #"^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$"#
+        return s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
+    }
+
+    /// Resolve a simulator name to its UDID via simctl
+    private static func resolveSimulatorUDID(name: String) async -> String? {
+        guard let result = try? await Shell.xcrun("simctl", "list", "devices", "-j"),
+              result.succeeded,
+              let data = result.stdout.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let devices = json["devices"] as? [String: [[String: Any]]] else {
+            return nil
+        }
+
+        // Search all runtimes for a device matching the name
+        for (_, deviceList) in devices {
+            for device in deviceList {
+                guard let deviceName = device["name"] as? String,
+                      let udid = device["udid"] as? String,
+                      let isAvailable = device["isAvailable"] as? Bool,
+                      isAvailable else { continue }
+
+                if deviceName == name {
+                    return udid
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Resolve the UDID of the currently booted simulator
+    private static func resolveBootedUDID() async -> String? {
+        guard let result = try? await Shell.xcrun("simctl", "list", "devices", "booted", "-j"),
+              result.succeeded,
+              let data = result.stdout.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let devices = json["devices"] as? [String: [[String: Any]]] else {
+            return nil
+        }
+
+        for (_, deviceList) in devices {
+            for device in deviceList {
+                if let state = device["state"] as? String, state == "Booted",
+                   let udid = device["udid"] as? String {
+                    return udid
+                }
+            }
+        }
+        return nil
     }
 
     static func clean(_ args: [String: Value]?) async -> CallTool.Result {

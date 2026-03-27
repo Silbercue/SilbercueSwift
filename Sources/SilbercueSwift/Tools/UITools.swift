@@ -159,11 +159,17 @@ enum UITools {
     // MARK: - Implementations
 
     static func wdaStatus(_ args: [String: Value]?) async -> CallTool.Result {
-        do {
-            let status = try await WDAClient.shared.status()
-            return .ok("WDA Status: \(status.ready ? "READY" : "NOT READY")\nBundle: \(status.bundleId)")
-        } catch {
-            return .fail("WDA not reachable: \(error)")
+        let healthy = await WDAClient.shared.isHealthy()
+        if healthy {
+            do {
+                let status = try await WDAClient.shared.status()
+                let sessionInfo = "Sessions tracked: \(await WDAClient.shared.sessionCount)"
+                return .ok("WDA Status: \(status.ready ? "READY" : "NOT READY")\nBundle: \(status.bundleId)\n\(sessionInfo)")
+            } catch {
+                return .ok("WDA reachable but status parse failed: \(error)")
+            }
+        } else {
+            return .fail("WDA not responding (health check timeout 2s). Try restarting WDA or the simulator.")
         }
     }
 
@@ -175,8 +181,17 @@ enum UITools {
         let bundleId = args?["bundle_id"]?.stringValue
 
         do {
+            // Health-check with auto-restart before creating session
+            try await WDAClient.shared.ensureWDARunning()
+
             let sid = try await WDAClient.shared.createSession(bundleId: bundleId)
-            return .ok("Session created: \(sid)")
+            var msg = "Session created: \(sid)"
+
+            // Warn if too many sessions are tracked
+            if let warning = await WDAClient.shared.sessionWarning {
+                msg += "\n\(warning)"
+            }
+            return .ok(msg)
         } catch {
             return .fail("Session creation failed: \(error)")
         }

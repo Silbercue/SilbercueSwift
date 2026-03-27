@@ -10,6 +10,12 @@ actor WDAClient {
 
     private var baseURL = "http://localhost:8100"
     private var sessionId: String?
+    private var knownSessionIds: [String] = []  // Track all created sessions
+
+    /// Default timeout for WDA requests (fast fail instead of endless hang)
+    private let requestTimeout: TimeInterval = 10
+    /// Quick timeout for health-check pings
+    private let healthCheckTimeout: TimeInterval = 2
 
     // MARK: - Configuration
 
@@ -22,7 +28,8 @@ actor WDAClient {
     private func request(
         method: String,
         path: String,
-        body: [String: Any]? = nil
+        body: [String: Any]? = nil,
+        timeout: TimeInterval? = nil
     ) async throws -> (Data, Int) {
         let urlString = baseURL + path
         guard let url = URL(string: urlString) else {
@@ -31,7 +38,7 @@ actor WDAClient {
 
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout ?? requestTimeout
 
         if let body = body {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -63,7 +70,57 @@ actor WDAClient {
         return json
     }
 
+    // MARK: - Health Check & Auto-Restart
+
+    /// Ping WDA /status with a fast 2s timeout. Returns true if WDA is responsive.
+    func isHealthy() async -> Bool {
+        do {
+            let (_, statusCode) = try await request(method: "GET", path: "/status", timeout: healthCheckTimeout)
+            return statusCode < 400
+        } catch {
+            return false
+        }
+    }
+
+    /// Restart WDA by launching the xctrunner on the given simulator.
+    func restartWDA(simulator: String = "booted") async throws {
+        // Kill any lingering WDA process
+        let _ = try? await Shell.xcrun("simctl", "terminate", simulator, "com.facebook.WebDriverAgentRunner.xctrunner")
+        // Brief pause for clean shutdown
+        try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+        // Relaunch WDA
+        let result = try await Shell.xcrun("simctl", "launch", simulator, "com.facebook.WebDriverAgentRunner.xctrunner")
+        guard result.succeeded else {
+            throw WDAError.wdaRestart("Failed to restart WDA: \(result.stderr)")
+        }
+        // Wait for WDA to become ready (poll up to 8s)
+        for _ in 0..<16 {
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+            if await isHealthy() {
+                sessionId = nil // Force new session after restart
+                return
+            }
+        }
+        throw WDAError.wdaRestart("WDA did not become ready within 8s after restart")
+    }
+
+    /// Health-check with auto-restart: ping /status, if unresponsive restart WDA.
+    func ensureWDARunning(simulator: String = "booted") async throws {
+        if await isHealthy() { return }
+        try await restartWDA(simulator: simulator)
+    }
+
     // MARK: - Session Management
+
+    /// Number of tracked sessions (for leak detection)
+    var sessionCount: Int { knownSessionIds.count }
+
+    /// Warning message if too many sessions are open, nil otherwise.
+    var sessionWarning: String? {
+        knownSessionIds.count > 2
+            ? "⚠️ \(knownSessionIds.count) WDA sessions tracked. Consider deleting unused sessions to avoid resource leaks."
+            : nil
+    }
 
     func createSession(bundleId: String? = nil) async throws -> String {
         var capabilities: [String: Any] = [:]
@@ -85,20 +142,34 @@ actor WDAClient {
         }
 
         self.sessionId = sessionId
+        if !knownSessionIds.contains(sessionId) {
+            knownSessionIds.append(sessionId)
+        }
         return sessionId
     }
 
     func deleteSession() async throws {
         guard let sid = sessionId else { return }
         _ = try? await request(method: "DELETE", path: "/session/\(sid)")
+        knownSessionIds.removeAll { $0 == sid }
         sessionId = nil
     }
 
     func ensureSession() async throws -> String {
         if let sid = sessionId {
-            // Quick health check
-            let (_, status) = try await request(method: "GET", path: "/session/\(sid)")
-            if status < 400 { return sid }
+            // Quick health check with fast timeout
+            do {
+                let (_, status) = try await request(method: "GET", path: "/session/\(sid)", timeout: healthCheckTimeout)
+                if status < 400 { return sid }
+            } catch {
+                // Session check failed — WDA might be unresponsive
+                // Try auto-restart before creating a new session
+                try await ensureWDARunning()
+            }
+        } else {
+            // No session yet — still check if WDA is alive before trying to create one
+            // This prevents a 10s hang on createSession if WDA is dead
+            try await ensureWDARunning()
         }
         return try await createSession()
     }
@@ -332,6 +403,8 @@ enum WDAError: Error, CustomStringConvertible {
     case wdaError(Int, String)
     case noSession
     case elementNotFound(String, String)
+    case wdaRestart(String)
+    case wdaNotResponding
 
     var description: String {
         switch self {
@@ -340,6 +413,8 @@ enum WDAError: Error, CustomStringConvertible {
         case .wdaError(let code, let msg): return "WDA error \(code): \(msg)"
         case .noSession: return "No WDA session"
         case .elementNotFound(let strategy, let value): return "Element not found: \(strategy)=\(value)"
+        case .wdaRestart(let msg): return "WDA restart failed: \(msg)"
+        case .wdaNotResponding: return "WDA not responding (timeout >10s). Try: wda_create_session or restart the simulator."
         }
     }
 }

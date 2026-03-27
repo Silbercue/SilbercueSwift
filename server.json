@@ -8,11 +8,11 @@
     "url": "https://github.com/silbercue/SilbercueSwift",
     "source": "github"
   },
-  "version": "0.2.0",
+  "version": "0.3.0",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/silbercue/SilbercueSwift/releases/download/v0.2.0/silbercueswift-v0.2.0.mcpb",
+      "identifier": "https://github.com/silbercue/SilbercueSwift/releases/download/v0.3.0/silbercueswift-v0.3.0.mcpb",
       "fileSha256": "71a720b993a662b8c59892e8edd4fcc496012d73603c5efa9f6ffab064ebc9ef",
       "transport": {
         "type": "stdio"
