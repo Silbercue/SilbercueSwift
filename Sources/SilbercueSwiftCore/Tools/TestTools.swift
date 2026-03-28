@@ -45,13 +45,16 @@ enum TestTools {
         Tool(
             name: "test_coverage",
             description: """
-                Get code coverage report per file from an xcresult bundle. \
+                Get code coverage report from an xcresult bundle. \
+                Without file param: per-file overview (which files need tests?). \
+                With file param: per-function detail (which functions are untested? how often called?). \
                 Either provide xcresult_path or project/scheme (will run tests with coverage enabled). \
                 Project, scheme, and simulator are auto-detected if omitted.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
+                    "file": .object(["type": .string("string"), "description": .string("Drill into a specific file: shows per-function coverage + execution counts. Filename or path (e.g. 'LoginViewModel.swift').")]),
                     "xcresult_path": .object(["type": .string("string"), "description": .string("Path to existing .xcresult bundle (must have been built with coverage enabled)")]),
                     "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
                     "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
@@ -474,6 +477,11 @@ enum TestTools {
             }
         }
 
+        // File drill-down: per-function coverage for a specific file
+        if let file = args?["file"]?.stringValue {
+            return await fileCoverage(file: file, xcresultPath: xcresultPath)
+        }
+
         let minCoverage = args?["min_coverage"]?.numberValue ?? 100.0
 
         guard let coverageJSON = await parseCoverage(xcresultPath),
@@ -483,6 +491,96 @@ enum TestTools {
         }
 
         return formatCoverageReport(json, minCoverage: minCoverage, xcresultPath: xcresultPath)
+    }
+
+    /// Per-function coverage for a specific file via `xccov --functions-for-file`.
+    private static func fileCoverage(file: String, xcresultPath: String) async -> CallTool.Result {
+        // xccov accepts partial filenames — it fuzzy-matches against the coverage archive
+        let result: ShellResult
+        do {
+            result = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xccov", "view", "--report", "--functions-for-file", file, "--json", xcresultPath],
+                timeout: 30
+            )
+        } catch {
+            return .fail("xccov error: \(error)")
+        }
+        guard result.succeeded, !result.stdout.isEmpty else {
+            return .fail("No coverage data for '\(file)'. File not in coverage report or coverage not enabled.\n\(result.stderr)")
+        }
+
+        // Parse JSON — can be an array of file objects or a single object
+        guard let data = result.stdout.data(using: .utf8),
+              let raw = try? JSONSerialization.jsonObject(with: data) else {
+            return .fail("Failed to parse xccov JSON for '\(file)'")
+        }
+
+        // Normalize: xccov returns either [FileObj] or {targets: [{files: [FileObj]}]}
+        var fileObjects: [[String: Any]] = []
+        if let array = raw as? [[String: Any]] {
+            fileObjects = array
+        } else if let dict = raw as? [String: Any],
+                  let targets = dict["targets"] as? [[String: Any]] {
+            for target in targets {
+                if let files = target["files"] as? [[String: Any]] {
+                    fileObjects += files
+                }
+            }
+        }
+
+        // Find matching file (fuzzy: filename contains the search term)
+        let searchName = (file as NSString).lastPathComponent.lowercased()
+        let matched = fileObjects.filter {
+            let name = (($0["name"] as? String) ?? ($0["path"] as? String) ?? "").lowercased()
+            return name.contains(searchName) || searchName.contains(name)
+        }
+
+        guard let fileObj = matched.first else {
+            let available = fileObjects.compactMap { $0["name"] as? String }.prefix(10)
+            return .fail("'\(file)' not found in coverage. Available: \(available.joined(separator: ", "))")
+        }
+
+        // Format output
+        let fileName = (fileObj["name"] as? String) ?? file
+        let fileCov = (fileObj["lineCoverage"] as? Double) ?? 0
+        let covered = (fileObj["coveredLines"] as? Int) ?? 0
+        let executable = (fileObj["executableLines"] as? Int) ?? 0
+
+        var lines: [String] = []
+        lines.append(String(format: "%@ — %.1f%% (%d/%d lines)", fileName, fileCov * 100, covered, executable))
+
+        if let functions = fileObj["functions"] as? [[String: Any]] {
+            // Sort by line number
+            let sorted = functions.sorted {
+                ($0["lineNumber"] as? Int ?? 0) < ($1["lineNumber"] as? Int ?? 0)
+            }
+
+            var untested: [String] = []
+            lines.append("")
+            for fn in sorted {
+                let name = (fn["name"] as? String) ?? "?"
+                let lineNum = (fn["lineNumber"] as? Int) ?? 0
+                let cov = (fn["lineCoverage"] as? Double) ?? 0
+                let execCount = (fn["executionCount"] as? Int) ?? 0
+                let fnLines = (fn["executableLines"] as? Int) ?? 0
+
+                if execCount == 0 {
+                    lines.append(String(format: "  L%-4d %-40s   0%%  UNTESTED  (%d lines)", lineNum, name, fnLines))
+                    untested.append("\(name) (L\(lineNum), \(fnLines) lines)")
+                } else {
+                    lines.append(String(format: "  L%-4d %-40s %3.0f%%  (%dx called)", lineNum, name, cov * 100, execCount))
+                }
+            }
+
+            if !untested.isEmpty {
+                lines.append("")
+                lines.append("Untested functions (\(untested.count)): \(untested.joined(separator: ", "))")
+            }
+        }
+
+        lines.append("\nxcresult: \(xcresultPath)")
+        return .ok(lines.joined(separator: "\n"))
     }
 
     static func buildAndDiagnose(_ args: [String: Value]?) async -> CallTool.Result {

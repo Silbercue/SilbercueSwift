@@ -33,12 +33,15 @@ enum UITools {
         ),
         Tool(
             name: "find_element",
-            description: "Find a UI element by accessibility ID, class name, xpath, or predicate string.",
+            description: "Find a UI element. With scroll: true, auto-scrolls the nearest ScrollView/List until the element appears (one call, no manual swipe loop needed).",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "using": .object(["type": .string("string"), "description": .string("Strategy: 'accessibility id', 'class name', 'xpath', 'predicate string', 'class chain'")]),
+                    "using": .object(["type": .string("string"), "description": .string("Strategy: 'accessibility id', 'class name', 'predicate string', 'class chain'")]),
                     "value": .object(["type": .string("string"), "description": .string("Search value")]),
+                    "scroll": .object(["type": .string("boolean"), "description": .string("Auto-scroll to find off-screen elements. Default: false")]),
+                    "direction": .object(["type": .string("string"), "description": .string("Scroll direction: 'down', 'up', 'left', 'right'. Default: 'down'")]),
+                    "max_swipes": .object(["type": .string("number"), "description": .string("Max scroll attempts. Default: 10")]),
                 ]),
                 "required": .array([.string("using"), .string("value")]),
             ])
@@ -293,11 +296,20 @@ enum UITools {
               let value = args?["value"]?.stringValue else {
             return .fail("Missing required: using, value")
         }
+        let scroll = args?["scroll"]?.boolValue ?? false
+        let direction = args?["direction"]?.stringValue ?? "down"
+        let maxSwipes = args?["max_swipes"]?.intValue ?? 10
         do {
             let start = CFAbsoluteTimeGetCurrent()
-            let elementId = try await WDAClient.shared.findElement(using: using, value: value)
+            let (elementId, swipes) = try await WDAClient.shared.findElement(
+                using: using, value: value, scroll: scroll, direction: direction, maxSwipes: maxSwipes
+            )
             let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            return .ok("Element found: \(elementId) (\(elapsed)ms)")
+            var msg = "Element found: \(elementId) (\(elapsed)ms)"
+            if swipes > 0 {
+                msg += " — scrolled \(swipes) time(s) \(direction)"
+            }
+            return .ok(msg)
         } catch {
             return .fail("Element not found: \(error)")
         }
@@ -421,7 +433,7 @@ enum UITools {
             } else {
                 // Find first text field and type into it
                 _ = try await WDAClient.shared.ensureSession()
-                let eid = try await WDAClient.shared.findElement(using: "class name", value: "XCUIElementTypeTextField")
+                let (eid, _) = try await WDAClient.shared.findElement(using: "class name", value: "XCUIElementTypeTextField")
                 if clearFirst {
                     try await WDAClient.shared.clearElement(elementId: eid)
                 }

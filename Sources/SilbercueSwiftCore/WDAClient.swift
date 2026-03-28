@@ -456,19 +456,26 @@ actor WDAClient {
 
     // MARK: - Element Finding
 
-    func findElement(using strategy: String, value: String) async throws -> String {
+    func findElement(using strategy: String, value: String, scroll: Bool = false, direction: String = "down", maxSwipes: Int = 10) async throws -> (elementId: String, swipes: Int) {
         let sid = try await ensureSession()
+        var body: [String: Any] = ["using": strategy, "value": value]
+        if scroll {
+            body["scroll"] = true
+            body["direction"] = direction
+            body["maxSwipes"] = maxSwipes
+        }
         let json = try await jsonRequest(
             method: "POST",
             path: "/session/\(sid)/element",
-            body: ["using": strategy, "value": value]
+            body: body
         )
 
         guard let element = json["value"] as? [String: Any],
               let elementId = element["ELEMENT"] as? String ?? element.values.first as? String else {
             throw WDAError.elementNotFound(strategy, value)
         }
-        return elementId
+        let swipes = element["swipes"] as? Int ?? 0
+        return (elementId, swipes)
     }
 
     func findElements(using strategy: String, value: String) async throws -> [String] {
