@@ -29,7 +29,7 @@ enum WDABackend: String, Sendable {
 actor WDAClient {
     static let shared = WDAClient()
 
-    private var baseURL = "http://localhost:8100"
+    private var baseURL = ProcessInfo.processInfo.environment["WDA_BASE_URL"] ?? "http://localhost:8100"
     private var sessionId: String?
     private var knownSessionIds: [String] = []  // Track all created sessions
 
@@ -195,12 +195,18 @@ actor WDAClient {
     /// Returns true if deploy succeeded and server is healthy, false otherwise.
     /// If a deploy is already in progress, waits for it instead of starting a new one.
     func deploySilbercueWDA(simulator: String = "booted") async -> Bool {
-        // H3 fix: If another deploy is in progress, wait for it instead of triggering premature fallback
+        // H3 fix: If another deploy is in progress, wait for it instead of triggering premature fallback.
+        // Actor isolation guarantees isDeploying is checked atomically (no await before the set).
         if isDeploying {
-            for _ in 1...15 {
+            Log.warn("deploySilbercueWDA: concurrent call detected, waiting for existing deploy")
+            for i in 1...15 {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
-                if await isHealthy() { return true }
+                if await isHealthy() {
+                    Log.warn("deploySilbercueWDA: existing deploy succeeded after \(i * 2)s wait")
+                    return true
+                }
             }
+            Log.warn("deploySilbercueWDA: existing deploy did not succeed within 30s")
             return false
         }
 
@@ -242,8 +248,15 @@ actor WDAClient {
             "-destination", "platform=iOS Simulator,id=\(udid)",
             "-quiet",
         ]
-        guard let buildResult = try? await Shell.run("/usr/bin/xcrun", arguments: buildArgs, timeout: 120),
-              buildResult.succeeded else {
+        let buildResult: ShellResult
+        do {
+            buildResult = try await Shell.run("/usr/bin/xcrun", arguments: buildArgs, timeout: 120)
+        } catch {
+            Log.warn("deploySilbercueWDA build error: \(error)")
+            return false
+        }
+        guard buildResult.succeeded else {
+            Log.warn("deploySilbercueWDA build failed: \(buildResult.stderr.prefix(500))")
             return false
         }
 
@@ -272,9 +285,15 @@ actor WDAClient {
     /// Resolve simulator identifier to actual UDID.
     private func resolveSimulatorUDID(_ simulator: String) async -> String {
         guard simulator == "booted" else { return simulator }
-        guard let result = try? await Shell.xcrun("simctl", "list", "devices", "booted", "-j"),
-              result.succeeded,
-              let data = result.stdout.data(using: .utf8),
+        let shellResult: ShellResult
+        do {
+            shellResult = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "booted", "-j")
+        } catch {
+            Log.warn("WDA resolveSimulatorUDID failed: \(error)")
+            return simulator
+        }
+        guard shellResult.succeeded,
+              let data = shellResult.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let devices = json["devices"] as? [String: [[String: Any]]] else {
             return simulator
@@ -370,7 +389,11 @@ actor WDAClient {
 
     func deleteSession() async throws {
         guard let sid = sessionId else { return }
-        _ = try? await request(method: "DELETE", path: "/session/\(sid)")
+        do {
+            _ = try await request(method: "DELETE", path: "/session/\(sid)")
+        } catch {
+            Log.warn("deleteSession(\(sid)) failed: \(error)")
+        }
         knownSessionIds.removeAll { $0 == sid }
         sessionId = nil
     }

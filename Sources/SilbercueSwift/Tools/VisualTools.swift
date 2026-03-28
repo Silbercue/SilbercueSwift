@@ -53,21 +53,15 @@ enum VisualTools {
 
             // Capture screenshot — burst (CoreSimulator) or simctl fallback
             let cgImage: CGImage
-            if CoreSimCapture.isAvailable, let img = try? await CoreSimCapture.captureImageAsync(simulator: sim)
-            {
-                cgImage = img
+            if CoreSimCapture.isAvailable {
+                do {
+                    cgImage = try await CoreSimCapture.captureImageAsync(simulator: sim)
+                } catch {
+                    Log.warn("saveBaseline: CoreSimCapture failed, falling back to simctl: \(error)")
+                    cgImage = try await simctlCapture(sim: sim, tmpPrefix: "baseline")
+                }
             } else {
-                // simctl fallback
-                let tmpPath = "/tmp/ss-baseline-\(UUID().uuidString).png"
-                let result = try await Shell.xcrun(
-                    timeout: 10, "simctl", "io", sim, "screenshot", "--type=png", tmpPath)
-                guard result.succeeded else {
-                    return .fail("Screenshot failed: \(result.stderr)")
-                }
-                guard let loaded = loadCGImage(path: tmpPath) else {
-                    return .fail("Failed to load screenshot")
-                }
-                cgImage = loaded
+                cgImage = try await simctlCapture(sim: sim, tmpPrefix: "baseline")
             }
 
             // Save as PNG baseline
@@ -107,19 +101,15 @@ enum VisualTools {
         do {
             // Capture current screenshot — burst or simctl fallback
             let currentImage: CGImage
-            if CoreSimCapture.isAvailable, let img = try? await CoreSimCapture.captureImageAsync(simulator: sim)
-            {
-                currentImage = img
+            if CoreSimCapture.isAvailable {
+                do {
+                    currentImage = try await CoreSimCapture.captureImageAsync(simulator: sim)
+                } catch {
+                    Log.warn("compareVisual: CoreSimCapture failed, falling back to simctl: \(error)")
+                    currentImage = try await simctlCapture(sim: sim, tmpPrefix: "compare")
+                }
             } else {
-                let result = try await Shell.xcrun(
-                    timeout: 10, "simctl", "io", sim, "screenshot", "--type=png", currentPath)
-                guard result.succeeded else {
-                    return .fail("Screenshot failed: \(result.stderr)")
-                }
-                guard let loaded = loadCGImage(path: currentPath) else {
-                    return .fail("Failed to load current screenshot")
-                }
-                currentImage = loaded
+                currentImage = try await simctlCapture(sim: sim, tmpPrefix: "compare")
             }
 
             // Load baseline
@@ -163,6 +153,23 @@ enum VisualTools {
         } catch {
             return .fail("Compare failed: \(error)")
         }
+    }
+
+    // MARK: - simctl Screenshot Fallback
+
+    private static func simctlCapture(sim: String, tmpPrefix: String) async throws -> CGImage {
+        let tmpPath = "/tmp/ss-\(tmpPrefix)-\(UUID().uuidString).png"
+        let result = try await Shell.xcrun(
+            timeout: 10, "simctl", "io", sim, "screenshot", "--type=png", tmpPath)
+        guard result.succeeded else {
+            throw NSError(domain: "VisualTools", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Screenshot failed: \(result.stderr)"])
+        }
+        guard let loaded = loadCGImage(path: tmpPath) else {
+            throw NSError(domain: "VisualTools", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "Failed to load screenshot from \(tmpPath)"])
+        }
+        return loaded
     }
 
     // MARK: - Image Helpers (internal for reuse by MultiDeviceTools)

@@ -45,7 +45,7 @@ enum ScreenshotTools {
                         annotations: nil, _meta: nil),
                 ])
             } catch {
-                // Fall through to simctl
+                Log.warn("Inline screenshot failed, falling back to simctl: \(error)")
                 return await simctlScreenshot(sim: sim, format: format, start: start)
             }
         }
@@ -61,7 +61,7 @@ enum ScreenshotTools {
         let outputPath = "/tmp/ss-screenshot.\(format)"
         do {
             let result = try await Shell.xcrun(
-                "simctl", "io", sim, "screenshot",
+                timeout: 15, "simctl", "io", sim, "screenshot",
                 "--type=\(format)",
                 outputPath
             )

@@ -1,4 +1,13 @@
+import Foundation
 import MCP
+
+// MARK: - Debug Logging (stderr, safe for MCP stdio transport)
+
+enum Log {
+    static func warn(_ message: String) {
+        fputs("[SilbercueSwift] \(message)\n", stderr)
+    }
+}
 
 // MARK: - Convenience for CallTool.Result
 

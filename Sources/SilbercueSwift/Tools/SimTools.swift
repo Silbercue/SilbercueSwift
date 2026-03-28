@@ -120,27 +120,24 @@ enum SimTools {
         }
         if nameOrUDID == "booted" { return "booted" }
 
-        let result = try await Shell.xcrun("simctl", "list", "devices", "-j")
+        let result = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "-j")
         guard let data = result.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let deviceGroups = json["devices"] as? [String: [[String: Any]]] else {
             throw NSError(domain: "SimTools", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse simulator list"])
         }
 
-        // Exact match first, then prefix match — never substring match (prevents wrong simulator for destructive ops)
-        var prefixMatch: String?
+        // Exact match only — prefix/substring matching causes false positives on destructive ops
+        // (e.g. "iPhone 16 Pro" would match "iPhone 16 Pro Max" with hasPrefix)
+        let needle = nameOrUDID.lowercased()
         for (_, devices) in deviceGroups {
             for device in devices {
                 guard let name = device["name"] as? String,
                       let udid = device["udid"] as? String else { continue }
-                if name.lowercased() == nameOrUDID.lowercased() { return udid }
-                if prefixMatch == nil && name.lowercased().hasPrefix(nameOrUDID.lowercased()) {
-                    prefixMatch = udid
-                }
+                if name.lowercased() == needle { return udid }
             }
         }
-        if let match = prefixMatch { return match }
-        throw NSError(domain: "SimTools", code: 2, userInfo: [NSLocalizedDescriptionKey: "Simulator '\(nameOrUDID)' not found"])
+        throw NSError(domain: "SimTools", code: 2, userInfo: [NSLocalizedDescriptionKey: "Simulator '\(nameOrUDID)' not found. Use exact name or UDID."])
     }
 
     // MARK: - Implementations
@@ -149,7 +146,7 @@ enum SimTools {
         let filter = args?["filter"]?.stringValue
 
         do {
-            let result = try await Shell.xcrun("simctl", "list", "devices", "-j")
+            let result = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "-j")
             guard let data = result.stdout.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let deviceGroups = json["devices"] as? [String: [[String: Any]]] else {
@@ -188,7 +185,7 @@ enum SimTools {
         }
         do {
             let udid = try await resolveSimulator(sim)
-            let result = try await Shell.xcrun("simctl", "boot", udid)
+            let result = try await Shell.xcrun(timeout: 60, "simctl", "boot", udid)
             if result.succeeded || result.stderr.contains("current state: Booted") {
                 return .ok("Simulator booted: \(udid)")
             }
@@ -204,7 +201,7 @@ enum SimTools {
         }
         do {
             let target = sim == "all" ? "all" : try await resolveSimulator(sim)
-            let result = try await Shell.xcrun("simctl", "shutdown", target)
+            let result = try await Shell.xcrun(timeout: 10, "simctl", "shutdown", target)
             return result.succeeded ? .ok("Simulator shutdown: \(target)") : .fail("Shutdown failed: \(result.stderr)")
         } catch {
             return .fail("Error: \(error)")
@@ -218,7 +215,7 @@ enum SimTools {
         let sim = args?["simulator"]?.stringValue ?? "booted"
         do {
             let udid = try await resolveSimulator(sim)
-            let result = try await Shell.xcrun("simctl", "install", udid, appPath)
+            let result = try await Shell.xcrun(timeout: 60, "simctl", "install", udid, appPath)
 
             // Invalidate WDA session — reinstalled app binary makes the old session stale.
             // Stale sessions accumulate and eventually crash WDA after multiple install cycles.
@@ -273,7 +270,7 @@ enum SimTools {
         let sim = args?["simulator"]?.stringValue ?? "booted"
         do {
             let udid = try await resolveSimulator(sim)
-            let result = try await Shell.xcrun("simctl", "terminate", udid, bundleId)
+            let result = try await Shell.xcrun(timeout: 10, "simctl", "terminate", udid, bundleId)
 
             // Invalidate WDA session — the terminated app may have been the session target.
             // Keeping a stale session causes WDA instability over multiple terminate cycles.

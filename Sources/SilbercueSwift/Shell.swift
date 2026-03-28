@@ -90,9 +90,9 @@ enum Shell {
         try await run("/usr/bin/xcrun", arguments: Array(arguments), timeout: timeout)
     }
 
-    /// Convenience for git commands
-    static func git(_ arguments: [String], workingDirectory: String) async throws -> ShellResult {
-        try await run("/usr/bin/git", arguments: arguments, workingDirectory: workingDirectory)
+    /// Convenience for git commands (default timeout: 30s)
+    static func git(_ arguments: [String], workingDirectory: String, timeout: TimeInterval = 30) async throws -> ShellResult {
+        try await run("/usr/bin/git", arguments: arguments, workingDirectory: workingDirectory, timeout: timeout)
     }
 }
 

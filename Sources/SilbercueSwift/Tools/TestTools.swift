@@ -111,7 +111,7 @@ enum TestTools {
         coverage: Bool, resultPath: String
     ) async throws -> (ShellResult, String) {
         // Remove old xcresult if exists
-        _ = try? await Shell.run("/bin/rm", arguments: ["-rf", resultPath])
+        _ = try? await Shell.run("/bin/rm", arguments: ["-rf", resultPath], timeout: 5)
 
         var args = xcodebuildBaseArgs(
             project: project, scheme: scheme,
@@ -144,7 +144,7 @@ enum TestTools {
         project: String, scheme: String, simulator: String,
         configuration: String, resultPath: String
     ) async throws -> (ShellResult, String) {
-        _ = try? await Shell.run("/bin/rm", arguments: ["-rf", resultPath])
+        _ = try? await Shell.run("/bin/rm", arguments: ["-rf", resultPath], timeout: 5)
 
         var args = xcodebuildBaseArgs(
             project: project, scheme: scheme,
@@ -165,50 +165,94 @@ enum TestTools {
 
     /// Parse xcresult test summary JSON
     private static func parseTestSummary(_ path: String) async -> String? {
-        guard let result = try? await Shell.run(
-            "/usr/bin/xcrun",
-            arguments: ["xcresulttool", "get", "test-results", "summary", "--path", path, "--compact"]
-        ), result.succeeded else { return nil }
-        return result.stdout
+        do {
+            let result = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xcresulttool", "get", "test-results", "summary", "--path", path, "--compact"],
+                timeout: 30
+            )
+            guard result.succeeded else {
+                Log.warn("parseTestSummary failed: \(result.stderr)")
+                return nil
+            }
+            return result.stdout
+        } catch {
+            Log.warn("parseTestSummary error: \(error)")
+            return nil
+        }
     }
 
     /// Parse xcresult test details JSON
     private static func parseTestDetails(_ path: String) async -> String? {
-        guard let result = try? await Shell.run(
-            "/usr/bin/xcrun",
-            arguments: ["xcresulttool", "get", "test-results", "tests", "--path", path, "--compact"]
-        ), result.succeeded else { return nil }
-        return result.stdout
+        do {
+            let result = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xcresulttool", "get", "test-results", "tests", "--path", path, "--compact"],
+                timeout: 30
+            )
+            guard result.succeeded else {
+                Log.warn("parseTestDetails failed: \(result.stderr)")
+                return nil
+            }
+            return result.stdout
+        } catch {
+            Log.warn("parseTestDetails error: \(error)")
+            return nil
+        }
     }
 
     /// Parse xcresult build results JSON
     private static func parseBuildResults(_ path: String) async -> String? {
-        guard let result = try? await Shell.run(
-            "/usr/bin/xcrun",
-            arguments: ["xcresulttool", "get", "build-results", "--path", path, "--compact"]
-        ), result.succeeded else { return nil }
-        return result.stdout
+        do {
+            let result = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xcresulttool", "get", "build-results", "--path", path, "--compact"],
+                timeout: 30
+            )
+            guard result.succeeded else {
+                Log.warn("parseBuildResults failed: \(result.stderr)")
+                return nil
+            }
+            return result.stdout
+        } catch {
+            Log.warn("parseBuildResults error: \(error)")
+            return nil
+        }
     }
 
     /// Export failure attachments (screenshots) from xcresult
     /// Returns array of (testId, filePath) tuples for exported images
     private static func exportFailureAttachments(_ xcresultPath: String) async -> [(test: String, path: String)] {
         let outputDir = "/tmp/ss-attachments-\(Int(Date().timeIntervalSince1970))"
-        guard let _ = try? await Shell.run("/bin/mkdir", arguments: ["-p", outputDir]),
-              let result = try? await Shell.run(
-                  "/usr/bin/xcrun",
-                  arguments: [
-                      "xcresulttool", "export", "attachments",
-                      "--path", xcresultPath,
-                      "--output-path", outputDir,
-                      "--only-failures",
-                  ]
-              ), result.succeeded else {
+        do {
+            _ = try await Shell.run("/bin/mkdir", arguments: ["-p", outputDir], timeout: 5)
+        } catch {
+            Log.warn("exportFailureAttachments mkdir failed: \(error)")
+            return []
+        }
+        let exportResult: ShellResult
+        do {
+            exportResult = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: [
+                    "xcresulttool", "export", "attachments",
+                    "--path", xcresultPath,
+                    "--output-path", outputDir,
+                    "--only-failures",
+                ],
+                timeout: 60
+            )
+        } catch {
+            Log.warn("exportFailureAttachments export failed: \(error)")
+            return []
+        }
+        guard exportResult.succeeded else {
+            Log.warn("exportFailureAttachments: \(exportResult.stderr)")
             return []
         }
 
         // Parse manifest.json for exported files
-        guard let manifestResult = try? await Shell.run("/bin/cat", arguments: ["\(outputDir)/manifest.json"]),
+        guard let manifestResult = try? await Shell.run("/bin/cat", arguments: ["\(outputDir)/manifest.json"], timeout: 5),
               let data = manifestResult.stdout.data(using: .utf8),
               let manifest = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
             return []
@@ -235,12 +279,21 @@ enum TestTools {
     /// Extract console output per failed test from xcresult action log
     /// Returns dict: testName → emittedOutput
     private static func extractFailedTestConsole(_ xcresultPath: String) async -> [String: String] {
-        guard let result = try? await Shell.run(
-            "/usr/bin/xcrun",
-            arguments: ["xcresulttool", "get", "log", "--path", xcresultPath, "--type", "action", "--compact"]
-        ), result.succeeded,
-              let data = result.stdout.data(using: .utf8),
+        let shellResult: ShellResult
+        do {
+            shellResult = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xcresulttool", "get", "log", "--path", xcresultPath, "--type", "action", "--compact"],
+                timeout: 30
+            )
+        } catch {
+            Log.warn("extractFailedTestConsole error: \(error)")
+            return [:]
+        }
+        guard shellResult.succeeded,
+              let data = shellResult.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            if !shellResult.succeeded { Log.warn("extractFailedTestConsole failed: \(shellResult.stderr)") }
             return [:]
         }
 
@@ -275,11 +328,21 @@ enum TestTools {
 
     /// Parse coverage report via xccov
     private static func parseCoverage(_ path: String) async -> String? {
-        guard let result = try? await Shell.run(
-            "/usr/bin/xcrun",
-            arguments: ["xccov", "view", "--report", "--json", path]
-        ), result.succeeded else { return nil }
-        return result.stdout
+        do {
+            let result = try await Shell.run(
+                "/usr/bin/xcrun",
+                arguments: ["xccov", "view", "--report", "--json", path],
+                timeout: 30
+            )
+            guard result.succeeded else {
+                Log.warn("parseCoverage failed: \(result.stderr)")
+                return nil
+            }
+            return result.stdout
+        } catch {
+            Log.warn("parseCoverage error: \(error)")
+            return nil
+        }
     }
 
     // MARK: - Tool Implementations
@@ -333,7 +396,7 @@ enum TestTools {
                 return .ok("Tests passed in \(elapsed)s (xcresult parse failed)\nxcresult: \(path)")
             } else {
                 let errorLines = buildResult.stderr.split(separator: "\n")
-                    .filter { $0.contains("error:") || $0.contains("failed") }
+                    .filter { $0.contains(": error:") || $0.contains(" failed") || $0.contains("FAILED") }
                     .prefix(20)
                     .joined(separator: "\n")
                 return .fail("Tests FAILED in \(elapsed)s\n\(errorLines)\nxcresult: \(path)")
@@ -451,7 +514,7 @@ enum TestTools {
                 return .ok("Build succeeded in \(elapsed)s (no diagnostics)\nxcresult: \(path)")
             } else {
                 let errorLines = buildResult.stderr.split(separator: "\n")
-                    .filter { $0.contains("error:") }
+                    .filter { $0.contains(": error:") }
                     .prefix(20)
                     .joined(separator: "\n")
                 return .fail("Build FAILED in \(elapsed)s\n\(errorLines)\nxcresult: \(path)")

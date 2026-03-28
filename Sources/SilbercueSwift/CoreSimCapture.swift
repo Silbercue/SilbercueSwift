@@ -8,17 +8,37 @@ import IOSurface
 /// ~5-27ms per screenshot (5ms convert + 22ms PNG / 5ms JPEG).
 enum CoreSimCapture {
 
+    // MARK: - Xcode Developer Dir (resolved via xcode-select)
+
+    private static let developerDir: String = {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcode-select")
+        process.arguments = ["-p"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            if let path = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !path.isEmpty {
+                return path
+            }
+        } catch {}
+        return "/Applications/Xcode.app/Contents/Developer"
+    }()
+
     // MARK: - Framework Loading (one-time)
 
     nonisolated(unsafe) private static let coreSimHandle: UnsafeMutableRawPointer? = {
-        dlopen(
-            "/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator", RTLD_NOW)
+        // Try system path first, then Xcode-relative
+        dlopen("/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator", RTLD_NOW)
+            ?? dlopen("\(developerDir)/Library/PrivateFrameworks/CoreSimulator.framework/CoreSimulator", RTLD_NOW)
     }()
 
     nonisolated(unsafe) private static let simKitHandle: UnsafeMutableRawPointer? = {
-        dlopen(
-            "/Applications/Xcode.app/Contents/Developer/Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit",
-            RTLD_NOW)
+        dlopen("\(developerDir)/Library/PrivateFrameworks/SimulatorKit.framework/SimulatorKit", RTLD_NOW)
     }()
 
     private static let ciContext = CIContext()
@@ -110,7 +130,7 @@ enum CoreSimCapture {
             throw CaptureError.frameworkNotFound
         }
 
-        let devDir = "/Applications/Xcode.app/Contents/Developer" as NSString
+        let devDir = developerDir as NSString
         var error: NSError?
         let ctx: NSObject? = withUnsafeMutablePointer(to: &error) { errPtr in
             let result = (ctxClass as AnyObject).perform(

@@ -123,10 +123,13 @@ enum FramebufferCapture {
         }
 
         if simulator != "booted" {
-            if let name = await resolveDeviceName(udid: simulator),
-                let match = simWindows.first(where: { $0.title?.contains(name) == true })
-            {
-                return match
+            if let name = await resolveDeviceName(udid: simulator) {
+                // Filter by contains, then pick shortest title to avoid false positives
+                // (e.g. "iPhone 16 Pro" matching "iPhone 16 Pro Max" window)
+                let matches = simWindows.filter { $0.title?.contains(name) == true }
+                if let best = matches.min(by: { ($0.title?.count ?? .max) < ($1.title?.count ?? .max) }) {
+                    return best
+                }
             }
         }
 
@@ -136,10 +139,15 @@ enum FramebufferCapture {
     }
 
     private static func resolveDeviceName(udid: String) async -> String? {
-        guard
-            let result = try? await Shell.xcrun(timeout: 5, "simctl", "list", "devices", "-j"),
-            result.succeeded,
-            let data = result.stdout.data(using: .utf8),
+        let shellResult: ShellResult
+        do {
+            shellResult = try await Shell.xcrun(timeout: 5, "simctl", "list", "devices", "-j")
+        } catch {
+            Log.warn("resolveDeviceName failed: \(error)")
+            return nil
+        }
+        guard shellResult.succeeded,
+            let data = shellResult.stdout.data(using: .utf8),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let runtimes = json["devices"] as? [String: [[String: Any]]]
         else { return nil }

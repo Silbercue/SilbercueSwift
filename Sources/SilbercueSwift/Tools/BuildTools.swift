@@ -100,14 +100,14 @@ enum BuildTools {
 
         let start = CFAbsoluteTimeGetCurrent()
         do {
-            let result = try await Shell.run("/usr/bin/xcodebuild", arguments: buildArgs)
+            let result = try await Shell.run("/usr/bin/xcodebuild", arguments: buildArgs, timeout: 600)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
 
             if result.succeeded {
                 return .ok("Build succeeded in \(elapsed)s\nScheme: \(scheme)\nSimulator: \(simulator)")
             } else {
                 let errorLines = result.stderr.split(separator: "\n")
-                    .filter { $0.contains("error:") }
+                    .filter { $0.contains(": error:") }
                     .prefix(20)
                     .joined(separator: "\n")
                 let errors = errorLines.isEmpty ? String(result.stderr.suffix(2000)) : errorLines
@@ -129,11 +129,18 @@ enum BuildTools {
     /// Resolve a simulator name to its UDID via simctl.
     /// Uses cascading match strategy: exact → case-insensitive → contains (prefer booted).
     private static func resolveSimulatorUDID(name: String) async -> String? {
-        guard let result = try? await Shell.xcrun("simctl", "list", "devices", "-j"),
-              result.succeeded,
-              let data = result.stdout.data(using: .utf8),
+        let shellResult: ShellResult
+        do {
+            shellResult = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "-j")
+        } catch {
+            Log.warn("resolveSimulatorUDID failed: \(error)")
+            return nil
+        }
+        guard shellResult.succeeded,
+              let data = shellResult.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let devices = json["devices"] as? [String: [[String: Any]]] else {
+            Log.warn("resolveSimulatorUDID: simctl list parse failed")
             return nil
         }
 
@@ -158,7 +165,8 @@ enum BuildTools {
                     exactMatch = udid
                 } else if exactMatch == nil && deviceName.lowercased() == nameLower {
                     caseInsensitiveMatch = udid
-                } else if deviceName.lowercased().contains(nameLower) {
+                } else if deviceName.lowercased().hasPrefix(nameLower) {
+                    // Prefix match instead of contains — prevents "Pro" matching "Pro Max"
                     if isBooted {
                         bootedContainsMatch = udid
                     } else if containsMatch == nil {
@@ -173,9 +181,15 @@ enum BuildTools {
 
     /// Resolve the UDID of the currently booted simulator
     private static func resolveBootedUDID() async -> String? {
-        guard let result = try? await Shell.xcrun("simctl", "list", "devices", "booted", "-j"),
-              result.succeeded,
-              let data = result.stdout.data(using: .utf8),
+        let shellResult: ShellResult
+        do {
+            shellResult = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "booted", "-j")
+        } catch {
+            Log.warn("resolveBootedUDID failed: \(error)")
+            return nil
+        }
+        guard shellResult.succeeded,
+              let data = shellResult.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let devices = json["devices"] as? [String: [[String: Any]]] else {
             return nil
@@ -204,7 +218,7 @@ enum BuildTools {
         do {
             let result = try await Shell.run("/usr/bin/xcodebuild", arguments: [
                 projectFlag, project, "-scheme", scheme, "clean"
-            ])
+            ], timeout: 60)
             return result.succeeded ? .ok("Clean succeeded") : .fail("Clean failed: \(result.stderr)")
         } catch {
             return .fail("Clean error: \(error)")
@@ -222,7 +236,7 @@ enum BuildTools {
                 "(", "-name", "*.xcodeproj", "-o", "-name", "*.xcworkspace", ")",
                 "-not", "-path", "*/Pods/*",
                 "-not", "-path", "*/.build/*",
-            ])
+            ], timeout: 15)
             return .ok(result.stdout.isEmpty ? "No projects found" : result.stdout)
         } catch {
             return .fail("Discovery error: \(error)")
@@ -240,7 +254,7 @@ enum BuildTools {
         do {
             let result = try await Shell.run("/usr/bin/xcodebuild", arguments: [
                 projectFlag, project, "-list", "-json"
-            ])
+            ], timeout: 15)
             if result.succeeded {
                 if let data = result.stdout.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
