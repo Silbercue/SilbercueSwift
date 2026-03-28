@@ -6,7 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
 
-The fastest, most complete MCP server for iOS development. One Swift binary, 40 tools, zero dependencies.
+The fastest, most complete MCP server for iOS development. One Swift binary, 50 tools, zero dependencies.
 
 Built for [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), and any MCP-compatible AI agent.
 
@@ -24,7 +24,8 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Failure screenshots from xcresult | No | Auto-exported |
 | Code coverage per file | Basic | Sorted, filterable |
 | Build error diagnosis with file:line | stderr parsing | xcresult JSON |
-| UI automation | No | Direct WDA (13 tools) |
+| UI automation | No | Direct WDA (14 tools) |
+| Alert handling (batch) | No | **3-tier search + accept_all** |
 | Screenshot latency | 13.2s | **0.3s** (44x faster) |
 | Console log per failed test | No | Optional (`include_console`) |
 | Wait for log pattern | No | `wait_for_log` with regex + timeout |
@@ -65,13 +66,14 @@ Add to your `.mcp.json`:
 
 Or for global availability, add to `~/.claude/.mcp.json`.
 
-## 40 Tools in 8 Categories
+## 50 Tools in 11 Categories
 
-### Build (4 tools)
+### Build (5 tools)
 
 | Tool | Description |
 |---|---|
-| `build_sim` | Build for iOS Simulator with optimized flags |
+| `build_sim` | Build for iOS Simulator — returns structured errors + caches bundle ID & app path |
+| `build_run_sim` | Build + boot + install + launch in one call — parallel 2-phase pipeline, ~9s faster than sequential |
 | `clean` | Clean build artifacts |
 | `discover_projects` | Find .xcodeproj/.xcworkspace files |
 | `list_schemes` | List available schemes |
@@ -85,7 +87,7 @@ Or for global availability, add to `~/.claude/.mcp.json`.
 | `test_coverage` | Code coverage per file, sorted and filterable |
 | `build_and_diagnose` | Build + structured errors/warnings from xcresult |
 
-### Simulator (6 tools)
+### Simulator (10 tools)
 
 | Tool | Description |
 |---|---|
@@ -95,26 +97,57 @@ Or for global availability, add to `~/.claude/.mcp.json`.
 | `install_app` | Install .app bundle |
 | `launch_app` | Launch app by bundle ID |
 | `terminate_app` | Terminate running app |
+| `clone_sim` | Clone an existing simulator |
+| `erase_sim` | Erase simulator content and settings |
+| `delete_sim` | Delete a simulator |
+| `set_orientation` | Rotate device (PORTRAIT, LANDSCAPE_LEFT, LANDSCAPE_RIGHT) via WDA |
 
-### UI Automation via WebDriverAgent (13 tools)
+### UI Automation via WebDriverAgent (14 tools)
 
 Direct HTTP communication with WDA — no Appium, no Node.js, no Python.
 
-| Tool | Latency |
-|---|---|
-| `find_element` / `find_elements` | ~100ms |
-| `click_element` | ~400ms |
-| `tap_coordinates` / `double_tap` / `long_press` | ~200ms |
-| `swipe` / `pinch` | ~400-600ms |
-| `type_text` / `get_text` | ~100-300ms |
-| `get_source` (view hierarchy) | ~5s |
-| `wda_status` / `wda_create_session` | ~50-100ms |
+| Tool | Description | Latency |
+|---|---|---|
+| `handle_alert` | **Accept, dismiss, or batch-handle system & in-app alerts** | ~200ms |
+| `find_element` / `find_elements` | Find elements by accessibility ID, xpath, predicate, class chain | ~100ms |
+| `click_element` | Tap a UI element | ~400ms |
+| `tap_coordinates` / `double_tap` / `long_press` | Coordinate-based gestures | ~200ms |
+| `swipe` / `pinch` | Directional swipe, zoom in/out | ~400-600ms |
+| `type_text` / `get_text` | Type into or read from elements | ~100-300ms |
+| `get_source` | Full view hierarchy (JSON/XML) | ~20ms |
+| `wda_status` / `wda_create_session` | WDA health check & session management | ~50-100ms |
+
+#### handle_alert — the smartest alert handler
+
+```bash
+# Accept a single alert with smart defaults
+handle_alert(action: "accept")
+
+# Dismiss with a specific button label
+handle_alert(action: "dismiss", button_label: "Not Now")
+
+# Batch-accept ALL alerts after app launch (unique to SilbercueSwift)
+handle_alert(action: "accept_all")
+```
+
+**3-tier alert search** — finds alerts across:
+1. **Springboard** — system permission dialogs (Location, Camera, Tracking)
+2. **ContactsUI** — iOS 18+ Contacts "Limited Access" dialog (separate process)
+3. **Active app** — in-app `UIAlertController` dialogs
+
+**Smart defaults** — knows which button to tap:
+- Accept: "Allow" → "Allow While Using App" → "OK" → "Continue" → last button
+- Dismiss: "Don't Allow" (handles Unicode U+2019) → "Cancel" → "Not Now" → first button
+
+**Batch mode** — `accept_all` / `dismiss_all` loops through multiple sequential alerts server-side. One HTTP roundtrip instead of N. Returns details of every handled alert.
+
+No other MCP server has 3-tier search, iOS 18 ContactsUI support, or batch alert handling.
 
 ### Screenshots (1 tool)
 
 | Tool | Latency |
 |---|---|
-| `screenshot` | **0.3s** |
+| `screenshot` | **0.3s** (3-tier: CoreSimulator IOSurface → ScreenCaptureKit → simctl) |
 
 ### Logs (4 tools)
 
@@ -139,6 +172,25 @@ Direct HTTP communication with WDA — no Appium, no Node.js, no Python.
 |---|---|
 | `git_status` / `git_diff` / `git_log` | Read operations |
 | `git_commit` / `git_branch` | Write operations |
+
+### Visual Regression (2 tools)
+
+| Tool | Description |
+|---|---|
+| `save_visual_baseline` | Save a screenshot as a named baseline |
+| `compare_visual` | Compare current screen against baseline — pixel diff + match score |
+
+### Multi-Device (1 tool)
+
+| Tool | Description |
+|---|---|
+| `multi_device_check` | Run visual checks across multiple simulators (Dark Mode, Landscape, iPad) — returns layout scores |
+
+### Session (1 tool)
+
+| Tool | Description |
+|---|---|
+| `set_defaults` | Set default project, scheme, simulator — avoids repeating params |
 
 ## xcresult Parsing — The Killer Feature
 
@@ -214,7 +266,9 @@ Measured on M3 MacBook Pro, iOS 18.2 Simulator:
 | Screenshot | 13.2s | crashes | **0.3s** |
 | Find element | N/A | ~500ms | **~100ms** |
 | Click element | N/A | ~500ms | **~400ms** |
-| View hierarchy | 15.5s | ~15s | **~5s** |
+| View hierarchy | 15.5s | ~15s | **~20ms** |
+| Handle alert | N/A | ~500ms | **~200ms** |
+| Handle 3 alerts (batch) | N/A | ~1500ms (3 calls) | **~800ms (1 call)** |
 | Simulator list | ~2s | N/A | **0.2s** |
 | Cold start | ~400ms | ~1s | **~50ms** |
 | Binary size | ~50MB | ~200MB | **8.5MB** |
@@ -226,14 +280,18 @@ If you're using [XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (now
 | Capability | XcodeBuildMCP | SilbercueSwift |
 |---|---|---|
 | Build for simulator | Yes | Yes |
+| **Build + Run in one call** | Yes (sequential) | **Yes (parallel pipeline, ~9s faster)** |
 | **Structured test results** | Partial — stderr parsing issues ([#177](https://github.com/getsentry/XcodeBuildMCP/issues/177)) | **Full xcresult JSON parsing** |
 | **Failure screenshots** from xcresult | No | **Auto-exported** |
 | **Code coverage** per file | Basic | **Sorted, filterable by min %** |
 | **Build error diagnosis** with file:line | stderr parsing | **xcresult JSON with sourceURL** |
-| **UI automation** | No | **13 tools — direct WDA** |
+| **UI automation** | No | **14 tools — direct WDA** |
+| **Alert handling** | No | **3-tier search + batch accept_all/dismiss_all** |
 | **Screenshot latency** | 13.2s | **0.3s (44x faster)** |
 | **Console log per failed test** | No | **Optional (`include_console`)** |
 | **Wait for log pattern** | No | **`wait_for_log` with regex + timeout** |
+| **Visual regression** | No | **Baseline + pixel diff comparison** |
+| **Multi-device check** | No | **Dark Mode, Landscape, iPad in one call** |
 | Runtime | Node.js (~50MB) | **Native Swift (8.5MB)** |
 | Cold start | ~400ms | **~50ms** |
 | Dependencies | npm ecosystem | **Zero** |
@@ -247,14 +305,17 @@ SilbercueSwift (8.5MB Swift binary)
 ├── MCP SDK (modelcontextprotocol/swift-sdk)
 ├── StdioTransport (JSON-RPC)
 └── Tools/
-    ├── BuildTools      → xcodebuild
+    ├── BuildTools       → xcodebuild (parallel pipeline, 3-tier app info)
     ├── TestTools        → xcodebuild test + xcresulttool + xccov
-    ├── SimTools         → simctl
-    ├── ScreenshotTools  → simctl io screenshot
-    ├── UITools          → WebDriverAgent (direct HTTP)
+    ├── SimTools         → simctl + WDA orientation
+    ├── ScreenshotTools  → CoreSimulator IOSurface → ScreenCaptureKit → simctl
+    ├── UITools          → WebDriverAgent (direct HTTP, 3-tier alert search)
     ├── LogTools         → log stream + regex pattern matching
     ├── ConsoleTools     → stdout/stderr capture
-    └── GitTools         → git
+    ├── VisualTools      → pixel diff + layout scoring
+    ├── MultiDeviceTools → parallel sim checks
+    ├── GitTools         → git
+    └── SessionState     → auto-detect + cached defaults
 ```
 
 No Node.js. No Python. No Appium server. No Selenium. One binary.
