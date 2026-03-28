@@ -1,11 +1,12 @@
 import MCP
 import Logging
+import SilbercueSwiftCore
 
 let logger = Logger(label: "com.silbercue.mcp")
 
 let server = Server(
     name: "SilbercueSwift",
-    version: "0.3.0",
+    version: "0.4.0",
     capabilities: .init(tools: .init(listChanged: true))
 )
 

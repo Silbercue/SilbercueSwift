@@ -37,38 +37,35 @@ enum SimTools {
         ),
         Tool(
             name: "install_app",
-            description: "Install an app bundle on a booted simulator.",
+            description: "Install an app bundle on a booted simulator. App path is auto-detected from last build if omitted.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'")]),
-                    "app_path": .object(["type": .string("string"), "description": .string("Path to .app bundle")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
+                    "app_path": .object(["type": .string("string"), "description": .string("Path to .app bundle. Auto-detected from last build_sim if omitted.")]),
                 ]),
-                "required": .array([.string("app_path")]),
             ])
         ),
         Tool(
             name: "launch_app",
-            description: "Launch an app on a booted simulator by bundle ID.",
+            description: "Launch an app on a booted simulator. Bundle ID is auto-detected from last build if omitted.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'")]),
-                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
+                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                 ]),
-                "required": .array([.string("bundle_id")]),
             ])
         ),
         Tool(
             name: "terminate_app",
-            description: "Terminate a running app on a simulator.",
+            description: "Terminate a running app on a simulator. Bundle ID is auto-detected from last build if omitted.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'")]),
-                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
+                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                 ]),
-                "required": .array([.string("bundle_id")]),
             ])
         ),
         Tool(
@@ -103,6 +100,28 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or name to delete")]),
                 ]),
                 "required": .array([.string("simulator")]),
+            ])
+        ),
+        Tool(
+            name: "set_orientation",
+            description: """
+                Set device orientation (portrait/landscape) via WDA. \
+                Uses XCUIDevice.shared.orientation — the only reliable programmatic method. \
+                Returns the confirmed orientation after change.
+                """,
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "orientation": .object([
+                        "type": .string("string"),
+                        "description": .string("Target orientation: PORTRAIT, LANDSCAPE, LANDSCAPE_LEFT, LANDSCAPE_RIGHT"),
+                        "enum": .array([
+                            .string("PORTRAIT"), .string("LANDSCAPE"),
+                            .string("LANDSCAPE_LEFT"), .string("LANDSCAPE_RIGHT"),
+                        ]),
+                    ]),
+                ]),
+                "required": .array([.string("orientation")]),
             ])
         ),
     ]
@@ -209,10 +228,15 @@ enum SimTools {
     }
 
     static func installApp(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let appPath = args?["app_path"]?.stringValue else {
-            return .fail("Missing required: app_path")
+        guard let appPath = await SessionState.shared.resolveAppPath(args?["app_path"]?.stringValue) else {
+            return .fail("Missing app_path — provide it or run build_sim first")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         do {
             let udid = try await resolveSimulator(sim)
             let result = try await Shell.xcrun(timeout: 60, "simctl", "install", udid, appPath)
@@ -228,10 +252,15 @@ enum SimTools {
     }
 
     static func launchApp(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let bundleId = args?["bundle_id"]?.stringValue else {
-            return .fail("Missing required: bundle_id")
+        guard let bundleId = await SessionState.shared.resolveBundleId(args?["bundle_id"]?.stringValue) else {
+            return .fail("Missing bundle_id — provide it or run build_sim first")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         do {
             let udid = try await resolveSimulator(sim)
 
@@ -264,10 +293,15 @@ enum SimTools {
     }
 
     static func terminateApp(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let bundleId = args?["bundle_id"]?.stringValue else {
-            return .fail("Missing required: bundle_id")
+        guard let bundleId = await SessionState.shared.resolveBundleId(args?["bundle_id"]?.stringValue) else {
+            return .fail("Missing bundle_id — provide it or run build_sim first")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         do {
             let udid = try await resolveSimulator(sim)
             let result = try await Shell.xcrun(timeout: 10, "simctl", "terminate", udid, bundleId)
@@ -338,6 +372,20 @@ enum SimTools {
             return .fail("Delete failed: \(result.stderr)")
         } catch {
             return .fail("Error: \(error)")
+        }
+    }
+
+    // MARK: - Device Orientation
+
+    static func setOrientation(_ args: [String: Value]?) async -> CallTool.Result {
+        guard let orientation = args?["orientation"]?.stringValue else {
+            return .fail("Missing required: orientation (PORTRAIT, LANDSCAPE, LANDSCAPE_LEFT, LANDSCAPE_RIGHT)")
+        }
+        do {
+            let result = try await WDAClient.shared.setOrientation(orientation)
+            return .ok("Orientation set to \(result)")
+        } catch {
+            return .fail("Orientation failed: \(error)")
         }
     }
 }

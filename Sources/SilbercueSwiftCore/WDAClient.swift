@@ -240,13 +240,21 @@ actor WDAClient {
         // Resolve UDID for xcodebuild destination
         let udid = await resolveSimulatorUDID(simulator)
 
-        // Step 1: Build for testing
+        // Find or create DerivedData for SilbercueWDA
+        let derivedData = await findOrCreateDerivedData(projectDir: projectDir)
+
+        // Step 1: Build with -target (Xcode 26 workaround: -scheme can't find
+        // iOS Simulator destinations for UI testing bundles)
         let buildArgs = [
-            "xcodebuild", "build-for-testing",
+            "xcodebuild",
             "-project", "\(projectDir)/SilbercueWDA.xcodeproj",
-            "-scheme", "SilbercueWDARunner",
-            "-destination", "platform=iOS Simulator,id=\(udid)",
-            "-quiet",
+            "-target", "SilbercueWDARunner",
+            "-sdk", "iphonesimulator",
+            "-arch", "arm64",
+            "-configuration", "Debug",
+            "SYMROOT=\(derivedData)/Build/Products",
+            "OBJROOT=\(derivedData)/Build/Intermediates.noindex",
+            "build",
         ]
         let buildResult: ShellResult
         do {
@@ -260,13 +268,17 @@ actor WDAClient {
             return false
         }
 
-        // Step 2: Start test-without-building in background — store handle for cleanup
+        // Step 2: Find xctestrun file and start test-without-building
+        let xctestrun = await findXctestrun(derivedData: derivedData)
+        guard let xctestrun else {
+            Log.warn("deploySilbercueWDA: no xctestrun file found in \(derivedData)")
+            return false
+        }
+
         let testArgs = [
             "xcodebuild", "test-without-building",
-            "-project", "\(projectDir)/SilbercueWDA.xcodeproj",
-            "-scheme", "SilbercueWDARunner",
-            "-destination", "platform=iOS Simulator,id=\(udid)",
-            "-only-testing:SilbercueWDARunner/SilbercueWDATest/testRunServer",
+            "-xctestrun", xctestrun,
+            "-destination", "id=\(udid)",
         ]
         deployTask = Task.detached {
             _ = try? await Shell.run("/usr/bin/xcrun", arguments: testArgs, timeout: 3600)
@@ -280,6 +292,31 @@ actor WDAClient {
             }
         }
         return false
+    }
+
+    /// Find existing DerivedData for SilbercueWDA, or return a predictable path.
+    private func findOrCreateDerivedData(projectDir: String) async -> String {
+        let ddBase = NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
+        // Search for existing SilbercueWDA DerivedData
+        if let result = try? await Shell.run("/usr/bin/find", arguments: [
+            ddBase, "-maxdepth", "1", "-name", "SilbercueWDA-*", "-type", "d",
+        ], timeout: 5), result.succeeded {
+            let dirs = result.stdout.split(separator: "\n").map(String.init)
+            if let first = dirs.first { return first }
+        }
+        return ddBase + "/SilbercueWDA-deploy"
+    }
+
+    /// Find the most recent arm64 xctestrun file in DerivedData.
+    private func findXctestrun(derivedData: String) async -> String? {
+        let productsDir = derivedData + "/Build/Products"
+        if let result = try? await Shell.run("/usr/bin/find", arguments: [
+            productsDir, "-name", "*arm64.xctestrun", "-type", "f",
+        ], timeout: 5), result.succeeded {
+            let files = result.stdout.split(separator: "\n").map(String.init)
+            return files.first
+        }
+        return nil
     }
 
     /// Resolve simulator identifier to actual UDID.
@@ -598,6 +635,90 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
+    // MARK: - Alert Handling
+
+    struct AlertInfo: Sendable {
+        let text: String
+        let buttons: [String]
+    }
+
+    struct BatchAlertResult: Sendable {
+        let count: Int
+        let alerts: [AlertDetail]
+
+        struct AlertDetail: Sendable {
+            let text: String
+            let buttons: [String]
+            let source: String
+        }
+    }
+
+    /// Get alert text. Returns nil if no alert is visible (404 from WDA).
+    func getAlertText() async -> AlertInfo? {
+        guard let sid = try? await ensureSession() else { return nil }
+        do {
+            let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/alert/text")
+            let text = json["value"] as? String ?? ""
+            let buttons = json["buttons"] as? [String] ?? []
+            return AlertInfo(text: text, buttons: buttons)
+        } catch {
+            return nil // No alert visible
+        }
+    }
+
+    /// Accept the current alert or all visible alerts.
+    func acceptAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
+        let sid = try await ensureSession()
+        var body: [String: Any] = [:]
+        if let label = buttonLabel { body["name"] = label }
+        if all { body["all"] = true }
+
+        let json = try await jsonRequest(method: "POST", path: "/session/\(sid)/alert/accept", body: body.isEmpty ? nil : body)
+        let text = json["alertText"] as? String
+        let buttons = json["buttons"] as? [String]
+        if let text, let buttons {
+            return AlertInfo(text: text, buttons: buttons)
+        }
+        return nil
+    }
+
+    /// Dismiss the current alert or all visible alerts.
+    func dismissAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
+        let sid = try await ensureSession()
+        var body: [String: Any] = [:]
+        if let label = buttonLabel { body["name"] = label }
+        if all { body["all"] = true }
+
+        let json = try await jsonRequest(method: "POST", path: "/session/\(sid)/alert/dismiss", body: body.isEmpty ? nil : body)
+        let text = json["alertText"] as? String
+        let buttons = json["buttons"] as? [String]
+        if let text, let buttons {
+            return AlertInfo(text: text, buttons: buttons)
+        }
+        return nil
+    }
+
+    /// Accept or dismiss all visible alerts in batch. Returns count + details.
+    func handleAllAlerts(accept: Bool) async throws -> BatchAlertResult {
+        let sid = try await ensureSession()
+        let path = accept ? "/session/\(sid)/alert/accept" : "/session/\(sid)/alert/dismiss"
+        let json = try await jsonRequest(method: "POST", path: path, body: ["all": true])
+
+        guard let value = json["value"] as? [String: Any] else {
+            return BatchAlertResult(count: 0, alerts: [])
+        }
+        let count = value["count"] as? Int ?? 0
+        let alertDicts = value["alerts"] as? [[String: Any]] ?? []
+        let alerts = alertDicts.map {
+            BatchAlertResult.AlertDetail(
+                text: $0["text"] as? String ?? "",
+                buttons: $0["buttons"] as? [String] ?? [],
+                source: $0["source"] as? String ?? ""
+            )
+        }
+        return BatchAlertResult(count: count, alerts: alerts)
+    }
+
     // MARK: - View Hierarchy
 
     func getSource(format: String = "json") async throws -> String {
@@ -622,6 +743,24 @@ actor WDAClient {
             throw WDAError.invalidResponse("Invalid screenshot data")
         }
         return data
+    }
+
+    // MARK: - Device Orientation
+
+    func getOrientation() async throws -> String {
+        let sid = try await ensureSession()
+        let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/orientation")
+        return json["value"] as? String ?? "PORTRAIT"
+    }
+
+    func setOrientation(_ orientation: String) async throws -> String {
+        let sid = try await ensureSession()
+        let json = try await jsonRequest(
+            method: "POST",
+            path: "/session/\(sid)/orientation",
+            body: ["orientation": orientation]
+        )
+        return json["value"] as? String ?? orientation
     }
 
     // MARK: - Status

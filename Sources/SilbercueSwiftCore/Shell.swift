@@ -65,9 +65,18 @@ enum Shell {
 
         let (out, err) = try await (stdoutData, stderrData)
 
-        // Await process exit without blocking the cooperative thread pool
+        // Await process exit without blocking the cooperative thread pool.
+        // Note: for-await on AsyncStream breaks early if the Task is cancelled
+        // (Swift 6 runtime). Guard against accessing terminationReason on a
+        // still-running process — that throws an uncatchable ObjC exception.
         for await _ in terminationContinuation.stream {}
         timeoutTask.cancel()
+
+        // If task was cancelled, the process may still be running
+        if process.isRunning {
+            kill(process.processIdentifier, SIGTERM)
+            return ShellResult(stdout: "", stderr: "Task cancelled", exitCode: -2)
+        }
 
         // Detect killed process (timeout or crash → uncaughtSignal)
         if process.terminationReason == .uncaughtSignal {

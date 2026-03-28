@@ -97,7 +97,7 @@ enum LogTools {
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'. Default: booted")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "subsystem": .object(["type": .string("string"), "description": .string("Filter by subsystem, e.g. 'com.myapp'")]),
                     "predicate": .object(["type": .string("string"), "description": .string("Custom predicate filter")]),
                     "level": .object(["type": .string("string"), "description": .string("Log level: default, info, debug. Default: debug")]),
@@ -132,7 +132,7 @@ enum LogTools {
                 "properties": .object([
                     "pattern": .object(["type": .string("string"), "description": .string("Regex pattern to match in log lines")]),
                     "timeout": .object(["type": .string("number"), "description": .string("Max seconds to wait. Default: 30")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'. Default: booted (used if log capture not running)")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted (used if log capture not running).")]),
                     "subsystem": .object(["type": .string("string"), "description": .string("Filter by subsystem (used if log capture not running)")]),
                 ]),
                 "required": .array([.string("pattern")]),
@@ -141,7 +141,12 @@ enum LogTools {
     ]
 
     static func startLogCapture(_ args: [String: Value]?) async -> CallTool.Result {
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         let subsystem = args?["subsystem"]?.stringValue
         let predicate = args?["predicate"]?.stringValue
         let level = args?["level"]?.stringValue ?? "debug"
@@ -186,8 +191,13 @@ enum LogTools {
         }
 
         let timeout = args?["timeout"]?.numberValue ?? 30.0
-        let simulator = args?["simulator"]?.stringValue ?? "booted"
         let subsystem = args?["subsystem"]?.stringValue
+        let simulator: String
+        do {
+            simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
 
         // Compile regex
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {

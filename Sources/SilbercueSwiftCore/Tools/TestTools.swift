@@ -8,20 +8,19 @@ enum TestTools {
             description: """
                 Run xcodebuild test on simulator and return structured xcresult summary. \
                 Shows passed/failed/skipped/expected-failure counts and duration. \
-                Much more useful than raw xcodebuild log output.
+                Project, scheme, and simulator are auto-detected if omitted.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name, e.g. 'iPhone 16'. Default: iPhone 16")]),
+                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
+                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "configuration": .object(["type": .string("string"), "description": .string("Build configuration (Debug/Release). Default: Debug")]),
                     "testplan": .object(["type": .string("string"), "description": .string("Test plan name (optional)")]),
                     "filter": .object(["type": .string("string"), "description": .string("Test filter, e.g. 'MyTests/testFoo' or 'MyTests' (optional)")]),
                     "coverage": .object(["type": .string("boolean"), "description": .string("Enable code coverage collection. Default: false")]),
                 ]),
-                "required": .array([.string("project"), .string("scheme")]),
             ])
         ),
         Tool(
@@ -29,16 +28,16 @@ enum TestTools {
             description: """
                 Get only failed tests with their error messages from an xcresult bundle. \
                 Either provide an xcresult_path from a previous test_sim run, \
-                or provide project/scheme to run tests first. \
+                or provide project/scheme to run tests first (auto-detected if omitted). \
                 Returns test name + failure message for each failed test.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "xcresult_path": .object(["type": .string("string"), "description": .string("Path to existing .xcresult bundle. If provided, skips running tests.")]),
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace (used if xcresult_path not provided)")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name (used if xcresult_path not provided)")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name. Default: iPhone 16")]),
+                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
+                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
                     "include_console": .object(["type": .string("boolean"), "description": .string("Include console output (print/NSLog) for each failed test. Default: false. Use when assertion message alone is not enough to diagnose the failure.")]),
                 ]),
             ])
@@ -48,15 +47,15 @@ enum TestTools {
             description: """
                 Get code coverage report per file from an xcresult bundle. \
                 Either provide xcresult_path or project/scheme (will run tests with coverage enabled). \
-                Returns file paths with line coverage percentage, sorted by coverage ascending.
+                Project, scheme, and simulator are auto-detected if omitted.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "xcresult_path": .object(["type": .string("string"), "description": .string("Path to existing .xcresult bundle (must have been built with coverage enabled)")]),
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name. Default: iPhone 16")]),
+                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
+                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
                     "min_coverage": .object(["type": .string("number"), "description": .string("Only show files below this coverage %. Default: 100 (show all)")]),
                 ]),
             ])
@@ -66,17 +65,16 @@ enum TestTools {
             description: """
                 Build an iOS app and extract structured errors/warnings from the xcresult bundle. \
                 Returns only actionable diagnostics (errors, warnings) with file paths and line numbers. \
-                Much more useful than raw xcodebuild output for diagnosing build failures.
+                Project, scheme, and simulator are auto-detected if omitted.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name. Default: iPhone 16")]),
+                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
+                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
                     "configuration": .object(["type": .string("string"), "description": .string("Build configuration (Debug/Release). Default: Debug")]),
                 ]),
-                "required": .array([.string("project"), .string("scheme")]),
             ])
         ),
     ]
@@ -89,9 +87,10 @@ enum TestTools {
         return "/tmp/ss-\(prefix)-\(ts).xcresult"
     }
 
-    /// Build xcodebuild arguments common to build/test
+    /// Build xcodebuild arguments common to build/test.
+    /// Handles simulator names and UDIDs via AutoDetect.buildDestination.
     private static func xcodebuildBaseArgs(
-        project: String, scheme: String, simulator: String, configuration: String
+        project: String, scheme: String, destination: String, configuration: String
     ) -> [String] {
         let isWorkspace = project.hasSuffix(".xcworkspace")
         let projectFlag = isWorkspace ? "-workspace" : "-project"
@@ -99,14 +98,14 @@ enum TestTools {
             projectFlag, project,
             "-scheme", scheme,
             "-configuration", configuration,
-            "-destination", "platform=iOS Simulator,name=\(simulator)",
+            "-destination", destination,
             "-skipMacroValidation",
         ]
     }
 
     /// Run xcodebuild test and return the xcresult path
     private static func runTests(
-        project: String, scheme: String, simulator: String,
+        project: String, scheme: String, destination: String,
         configuration: String, testplan: String?, filter: String?,
         coverage: Bool, resultPath: String
     ) async throws -> (ShellResult, String) {
@@ -115,7 +114,7 @@ enum TestTools {
 
         var args = xcodebuildBaseArgs(
             project: project, scheme: scheme,
-            simulator: simulator, configuration: configuration
+            destination: destination, configuration: configuration
         )
         args += ["-resultBundlePath", resultPath]
 
@@ -141,14 +140,14 @@ enum TestTools {
 
     /// Run xcodebuild build and return the xcresult path
     private static func runBuild(
-        project: String, scheme: String, simulator: String,
+        project: String, scheme: String, destination: String,
         configuration: String, resultPath: String
     ) async throws -> (ShellResult, String) {
         _ = try? await Shell.run("/bin/rm", arguments: ["-rf", resultPath], timeout: 5)
 
         var args = xcodebuildBaseArgs(
             project: project, scheme: scheme,
-            simulator: simulator, configuration: configuration
+            destination: destination, configuration: configuration
         )
         args += [
             "-parallelizeTargets",
@@ -348,22 +347,28 @@ enum TestTools {
     // MARK: - Tool Implementations
 
     static func testSim(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let project = args?["project"]?.stringValue,
-              let scheme = args?["scheme"]?.stringValue else {
-            return .fail("Missing required: project, scheme")
+        let project: String
+        let scheme: String
+        let simulator: String
+        do {
+            project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
+            scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
+            simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
         }
 
-        let simulator = args?["simulator"]?.stringValue ?? "iPhone 16"
         let configuration = args?["configuration"]?.stringValue ?? "Debug"
         let testplan = args?["testplan"]?.stringValue
         let filter = args?["filter"]?.stringValue
         let coverage = args?["coverage"]?.boolValue ?? false
         let resultPath = xcresultPath(prefix: "test")
+        let destination = await AutoDetect.buildDestination(simulator)
 
         let start = CFAbsoluteTimeGetCurrent()
         do {
             let (buildResult, path) = try await runTests(
-                project: project, scheme: scheme, simulator: simulator,
+                project: project, scheme: scheme, destination: destination,
                 configuration: configuration, testplan: testplan,
                 filter: filter, coverage: coverage, resultPath: resultPath
             )
@@ -412,22 +417,20 @@ enum TestTools {
         if let provided = args?["xcresult_path"]?.stringValue {
             xcresultPath = provided
         } else {
-            guard let project = args?["project"]?.stringValue,
-                  let scheme = args?["scheme"]?.stringValue else {
-                return .fail("Missing required: xcresult_path OR (project + scheme)")
-            }
-            let simulator = args?["simulator"]?.stringValue ?? "iPhone 16"
-            let path = Self.xcresultPath(prefix: "fail")
-
             do {
+                let project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
+                let scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
+                let simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+                let destination = await AutoDetect.buildDestination(simulator)
+                let path = Self.xcresultPath(prefix: "fail")
                 let (_, p) = try await runTests(
-                    project: project, scheme: scheme, simulator: simulator,
+                    project: project, scheme: scheme, destination: destination,
                     configuration: "Debug", testplan: nil, filter: nil,
                     coverage: false, resultPath: path
                 )
                 xcresultPath = p
             } catch {
-                return .fail("Test run error: \(error)")
+                return .fail("\(error)")
             }
         }
 
@@ -454,22 +457,20 @@ enum TestTools {
         if let provided = args?["xcresult_path"]?.stringValue {
             xcresultPath = provided
         } else {
-            guard let project = args?["project"]?.stringValue,
-                  let scheme = args?["scheme"]?.stringValue else {
-                return .fail("Missing required: xcresult_path OR (project + scheme)")
-            }
-            let simulator = args?["simulator"]?.stringValue ?? "iPhone 16"
-            let path = Self.xcresultPath(prefix: "cov")
-
             do {
+                let project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
+                let scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
+                let simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+                let destination = await AutoDetect.buildDestination(simulator)
+                let path = Self.xcresultPath(prefix: "cov")
                 let (_, p) = try await runTests(
-                    project: project, scheme: scheme, simulator: simulator,
+                    project: project, scheme: scheme, destination: destination,
                     configuration: "Debug", testplan: nil, filter: nil,
                     coverage: true, resultPath: path
                 )
                 xcresultPath = p
             } catch {
-                return .fail("Test run error: \(error)")
+                return .fail("\(error)")
             }
         }
 
@@ -485,19 +486,25 @@ enum TestTools {
     }
 
     static func buildAndDiagnose(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let project = args?["project"]?.stringValue,
-              let scheme = args?["scheme"]?.stringValue else {
-            return .fail("Missing required: project, scheme")
+        let project: String
+        let scheme: String
+        let simulator: String
+        do {
+            project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
+            scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
+            simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
         }
 
-        let simulator = args?["simulator"]?.stringValue ?? "iPhone 16"
         let configuration = args?["configuration"]?.stringValue ?? "Debug"
         let resultPath = xcresultPath(prefix: "build")
+        let destination = await AutoDetect.buildDestination(simulator)
 
         let start = CFAbsoluteTimeGetCurrent()
         do {
             let (buildResult, path) = try await runBuild(
-                project: project, scheme: scheme, simulator: simulator,
+                project: project, scheme: scheme, destination: destination,
                 configuration: configuration, resultPath: resultPath
             )
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)

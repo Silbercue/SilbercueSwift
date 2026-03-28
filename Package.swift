@@ -9,8 +9,8 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
     ],
     targets: [
-        .executableTarget(
-            name: "SilbercueSwift",
+        .target(
+            name: "SilbercueSwiftCore",
             dependencies: [
                 .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "Logging", package: "swift-log"),
@@ -18,6 +18,18 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("ScreenCaptureKit"),
             ]
+        ),
+        .executableTarget(
+            name: "SilbercueSwift",
+            dependencies: [
+                "SilbercueSwiftCore",
+                .product(name: "MCP", package: "swift-sdk"),
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
+        .testTarget(
+            name: "SmartContextTests",
+            dependencies: ["SilbercueSwiftCore"]
         ),
     ]
 )

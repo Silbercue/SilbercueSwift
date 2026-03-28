@@ -14,7 +14,7 @@ enum VisualTools {
                 "type": .string("object"),
                 "properties": .object([
                     "name": .object(["type": .string("string"), "description": .string("Baseline name (e.g. 'login-screen'). Used as filename.")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'. Default: booted")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "baseline_dir": .object(["type": .string("string"), "description": .string("Directory to store baselines. Default: visual-baselines/")]),
                 ]),
                 "required": .array([.string("name")]),
@@ -27,7 +27,7 @@ enum VisualTools {
                 "type": .string("object"),
                 "properties": .object([
                     "name": .object(["type": .string("string"), "description": .string("Baseline name to compare against.")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'. Default: booted")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "threshold": .object(["type": .string("number"), "description": .string("Max allowed diff percentage (0-100). Default: 0.5")]),
                     "baseline_dir": .object(["type": .string("string"), "description": .string("Directory where baselines are stored. Default: visual-baselines/")]),
                 ]),
@@ -42,7 +42,12 @@ enum VisualTools {
         guard let name = args?["name"]?.stringValue, !name.isEmpty else {
             return .fail("Missing required: name")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         let baselineDir = args?["baseline_dir"]?.stringValue ?? defaultBaselineDir
 
         do {
@@ -84,7 +89,12 @@ enum VisualTools {
         guard let name = args?["name"]?.stringValue, !name.isEmpty else {
             return .fail("Missing required: name")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         let threshold = args?["threshold"]?.numberValue ?? 0.5
         let baselineDir = args?["baseline_dir"]?.stringValue ?? defaultBaselineDir
 

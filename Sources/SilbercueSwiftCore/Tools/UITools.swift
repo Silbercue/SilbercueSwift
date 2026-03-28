@@ -9,6 +9,18 @@ enum UITools {
             inputSchema: .object(["type": .string("object"), "properties": .object([:])])
         ),
         Tool(
+            name: "handle_alert",
+            description: "Handle iOS system alerts AND in-app dialogs. Searches Springboard, active app, and ContactsUI (iOS 18+). Actions: accept, dismiss, get_text, accept_all, dismiss_all. One call replaces screenshot→find→click.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "action": .object(["type": .string("string"), "description": .string("Action: 'accept', 'dismiss', 'get_text', 'accept_all' (batch), or 'dismiss_all' (batch)")]),
+                    "button_label": .object(["type": .string("string"), "description": .string("Optional: specific button to tap (e.g. 'Allow While Using App'). If omitted, uses smart defaults.")]),
+                ]),
+                "required": .array([.string("action")]),
+            ])
+        ),
+        Tool(
             name: "wda_create_session",
             description: "Create a new WDA session, optionally for a specific app.",
             inputSchema: .object([
@@ -157,6 +169,78 @@ enum UITools {
     ]
 
     // MARK: - Implementations
+
+    static func handleAlert(_ args: [String: Value]?) async -> CallTool.Result {
+        guard let action = args?["action"]?.stringValue else {
+            return .fail("Missing required: action ('accept', 'dismiss', 'get_text', 'accept_all', 'dismiss_all')")
+        }
+        let buttonLabel = args?["button_label"]?.stringValue
+
+        switch action {
+        case "get_text":
+            guard let info = await WDAClient.shared.getAlertText() else {
+                return .ok("No alert visible.")
+            }
+            return .ok("Alert text: \(info.text)\nButtons: \(info.buttons.joined(separator: ", "))")
+
+        case "accept":
+            do {
+                let info = try await WDAClient.shared.acceptAlert(buttonLabel: buttonLabel)
+                var msg = "Alert accepted."
+                if let info {
+                    msg += "\nAlert was: \(info.text)\nButtons were: \(info.buttons.joined(separator: ", "))"
+                }
+                return .ok(msg)
+            } catch {
+                return .fail("Accept alert failed: \(error)")
+            }
+
+        case "dismiss":
+            do {
+                let info = try await WDAClient.shared.dismissAlert(buttonLabel: buttonLabel)
+                var msg = "Alert dismissed."
+                if let info {
+                    msg += "\nAlert was: \(info.text)\nButtons were: \(info.buttons.joined(separator: ", "))"
+                }
+                return .ok(msg)
+            } catch {
+                return .fail("Dismiss alert failed: \(error)")
+            }
+
+        case "accept_all":
+            do {
+                let result = try await WDAClient.shared.handleAllAlerts(accept: true)
+                if result.count == 0 {
+                    return .ok("No alerts visible.")
+                }
+                var msg = "\(result.count) alert(s) accepted."
+                for (i, alert) in result.alerts.enumerated() {
+                    msg += "\n  [\(i + 1)] \(alert.text) → buttons: \(alert.buttons.joined(separator: ", ")) (source: \(alert.source))"
+                }
+                return .ok(msg)
+            } catch {
+                return .fail("Accept all alerts failed: \(error)")
+            }
+
+        case "dismiss_all":
+            do {
+                let result = try await WDAClient.shared.handleAllAlerts(accept: false)
+                if result.count == 0 {
+                    return .ok("No alerts visible.")
+                }
+                var msg = "\(result.count) alert(s) dismissed."
+                for (i, alert) in result.alerts.enumerated() {
+                    msg += "\n  [\(i + 1)] \(alert.text) → buttons: \(alert.buttons.joined(separator: ", ")) (source: \(alert.source))"
+                }
+                return .ok(msg)
+            } catch {
+                return .fail("Dismiss all alerts failed: \(error)")
+            }
+
+        default:
+            return .fail("Unknown action: '\(action)'. Use 'accept', 'dismiss', 'get_text', 'accept_all', or 'dismiss_all'.")
+        }
+    }
 
     static func wdaStatus(_ args: [String: Value]?) async -> CallTool.Result {
         let healthy = await WDAClient.shared.isHealthy()

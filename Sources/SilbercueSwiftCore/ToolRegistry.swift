@@ -1,9 +1,10 @@
 import MCP
 
 /// Central registry of all tools. Each module adds its tools here.
-enum ToolRegistry {
-    static var allTools: [Tool] {
+public enum ToolRegistry {
+    public static var allTools: [Tool] {
         var tools: [Tool] = []
+        tools += SessionState.tools
         tools += BuildTools.tools
         tools += SimTools.tools
         tools += ScreenshotTools.tools
@@ -17,10 +18,14 @@ enum ToolRegistry {
         return tools
     }
 
-    static func dispatch(_ name: String, _ args: [String: Value]?) async -> CallTool.Result {
+    public static func dispatch(_ name: String, _ args: [String: Value]?) async -> CallTool.Result {
         switch name {
+        // Session
+        case "set_defaults":      return await SessionState.handleSetDefaults(args)
+
         // Build
         case "build_sim":         return await BuildTools.buildSim(args)
+        case "build_run_sim":     return await BuildTools.buildRunSim(args)
         case "clean":             return await BuildTools.clean(args)
         case "discover_projects": return await BuildTools.discoverProjects(args)
         case "list_schemes":      return await BuildTools.listSchemes(args)
@@ -35,11 +40,13 @@ enum ToolRegistry {
         case "clone_sim":         return await SimTools.cloneSim(args)
         case "erase_sim":         return await SimTools.eraseSim(args)
         case "delete_sim":        return await SimTools.deleteSim(args)
+        case "set_orientation":   return await SimTools.setOrientation(args)
 
         // Screenshots
         case "screenshot":        return await ScreenshotTools.screenshot(args)
 
         // UI Automation (WDA)
+        case "handle_alert":      return await UITools.handleAlert(args)
         case "wda_status":        return await UITools.wdaStatus(args)
         case "wda_create_session": return await UITools.wdaCreateSession(args)
         case "find_element":      return await UITools.findElement(args)

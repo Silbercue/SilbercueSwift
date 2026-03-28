@@ -130,15 +130,14 @@ enum ConsoleTools {
     static let tools: [Tool] = [
         Tool(
             name: "launch_app_console",
-            description: "Launch an app with console output capture. Captures all print() and NSLog output from the app. Use read_app_console to read the output.",
+            description: "Launch an app with console output capture. Captures all print() and NSLog output. Bundle ID is auto-detected from last build if omitted.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or 'booted'. Default: booted")]),
-                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier")]),
+                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
+                    "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                     "args": .object(["type": .string("string"), "description": .string("Space-separated launch arguments for the app")]),
                 ]),
-                "required": .array([.string("bundle_id")]),
             ])
         ),
         Tool(
@@ -161,19 +160,20 @@ enum ConsoleTools {
     ]
 
     static func launchAppConsole(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let bundleId = args?["bundle_id"]?.stringValue else {
-            return .fail("Missing required: bundle_id")
+        guard let bundleId = await SessionState.shared.resolveBundleId(args?["bundle_id"]?.stringValue) else {
+            return .fail("Missing bundle_id — provide it or run build_sim first")
         }
-        let sim = args?["simulator"]?.stringValue ?? "booted"
         let launchArgs = args?["args"]?.stringValue?.split(separator: " ").map(String.init) ?? []
 
+        let sim: String
         do {
-            let udid: String
-            if sim == "booted" {
-                udid = "booted"
-            } else {
-                udid = try await SimTools.resolveSimulator(sim)
-            }
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
+
+        do {
+            let udid = try await SimTools.resolveSimulator(sim)
             let msg = try await AppConsole.shared.launch(simulator: udid, bundleId: bundleId, args: launchArgs)
             return .ok(msg)
         } catch {

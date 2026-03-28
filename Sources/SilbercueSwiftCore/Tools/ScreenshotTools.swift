@@ -5,13 +5,13 @@ enum ScreenshotTools {
     static let tools: [Tool] = [
         Tool(
             name: "screenshot",
-            description: "Take a screenshot of a booted simulator. Returns the image inline. 3-tier: burst (~10ms, native) → stream (~20ms, ScreenCaptureKit) → safe (~320ms, simctl).",
+            description: "Take a screenshot of a booted simulator. Returns the image inline. 3-tier: burst (~10ms, native) → stream (~20ms, ScreenCaptureKit) → safe (~320ms, simctl). Simulator is auto-detected if omitted.",
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
                     "simulator": .object([
                         "type": .string("string"),
-                        "description": .string("Simulator UDID or 'booted'. Default: booted"),
+                        "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted."),
                     ]),
                     "format": .object([
                         "type": .string("string"),
@@ -23,7 +23,12 @@ enum ScreenshotTools {
     ]
 
     static func screenshot(_ args: [String: Value]?) async -> CallTool.Result {
-        let sim = args?["simulator"]?.stringValue ?? "booted"
+        let sim: String
+        do {
+            sim = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
+        } catch {
+            return .fail("\(error)")
+        }
         let format = args?["format"]?.stringValue ?? "jpeg"
 
         let start = CFAbsoluteTimeGetCurrent()
