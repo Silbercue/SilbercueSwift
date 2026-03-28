@@ -23,8 +23,16 @@ enum CoreSimCapture {
 
     private static let ciContext = CIContext()
 
-    /// Cached SimServiceContext (expensive to create: ~167ms, reuse across calls).
+    // MARK: - Cached State (avoid re-traversal on every call)
+
+    /// Cached SimServiceContext (~167ms to create).
     nonisolated(unsafe) private static var _serviceContext: NSObject?
+
+    /// Cached descriptor that has the framebufferSurface property.
+    /// The IOSurface itself changes on every frame, but the descriptor object is stable.
+    nonisolated(unsafe) private static var _cachedDescriptor: NSObject?
+    nonisolated(unsafe) private static var _cachedSurfaceSelector: Selector?
+    nonisolated(unsafe) private static var _cachedSimulator: String?
 
     /// Whether CoreSimulator frameworks are available.
     static var isAvailable: Bool {
@@ -39,14 +47,41 @@ enum CoreSimCapture {
             throw CaptureError.frameworkNotFound
         }
 
-        let device = try findDevice(simulator: simulator)
-        let surface = try getFramebufferSurface(device: device)
+        let surface = try getCachedSurface(simulator: simulator)
 
         let ciImage = CIImage(ioSurface: surface)
         guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else {
             throw CaptureError.conversionFailed
         }
         return cgImage
+    }
+
+    // MARK: - Cached Surface Access
+
+    /// Get the IOSurface, reusing the cached descriptor path when possible.
+    private static func getCachedSurface(simulator: String) throws -> IOSurfaceRef {
+        // Fast path: reuse cached descriptor
+        if simulator == _cachedSimulator,
+            let descriptor = _cachedDescriptor,
+            let surfaceSel = _cachedSurfaceSelector,
+            let result = descriptor.perform(surfaceSel)?.takeUnretainedValue()
+        {
+            let raw = Unmanaged.passUnretained(result).toOpaque()
+            let ref = unsafeBitCast(raw, to: IOSurfaceRef.self)
+            if IOSurfaceGetWidth(ref) > 0 && IOSurfaceGetHeight(ref) > 0 {
+                return ref
+            }
+        }
+
+        // Slow path: full traversal, then cache
+        let device = try findDevice(simulator: simulator)
+        let (surface, descriptor, surfaceSel) = try findFramebufferSurface(device: device)
+
+        _cachedDescriptor = descriptor
+        _cachedSurfaceSelector = surfaceSel
+        _cachedSimulator = simulator
+
+        return surface
     }
 
     // MARK: - Service Context (cached)
@@ -80,7 +115,6 @@ enum CoreSimCapture {
     private static func findDevice(simulator: String) throws -> NSObject {
         let serviceContext = try getServiceContext()
 
-        // serviceContext.defaultDeviceSetWithError: → SimDeviceSet
         var error: NSError?
         let deviceSet: NSObject? = withUnsafeMutablePointer(to: &error) { errPtr in
             let result = serviceContext.perform(
@@ -99,7 +133,6 @@ enum CoreSimCapture {
         }
 
         if simulator == "booted" {
-            // state == 3 means booted
             for device in devices {
                 if let state = device.value(forKey: "state") as? Int, state == 3 {
                     return device
@@ -120,7 +153,10 @@ enum CoreSimCapture {
 
     // MARK: - Framebuffer Access
 
-    private static func getFramebufferSurface(device: NSObject) throws -> IOSurfaceRef {
+    /// Find the IOSurface and cache the descriptor + selector for reuse.
+    private static func findFramebufferSurface(device: NSObject) throws -> (
+        IOSurfaceRef, NSObject, Selector
+    ) {
         guard let io = device.value(forKey: "io") as? NSObject else {
             throw CaptureError.noFramebuffer("Cannot access device.io")
         }
@@ -134,33 +170,22 @@ enum CoreSimCapture {
                 let descriptor = port.perform(sel("descriptor"))?.takeUnretainedValue() as? NSObject
             else { continue }
 
-            // Try framebufferSurface (Xcode 13.2+), then ioSurface (older)
-            if let surface = extractSurface(from: descriptor, selector: "framebufferSurface") {
-                return surface
-            }
-            if let surface = extractSurface(from: descriptor, selector: "ioSurface") {
-                return surface
+            for selName in ["framebufferSurface", "ioSurface"] {
+                let s = sel(selName)
+                guard descriptor.responds(to: s),
+                    let result = descriptor.perform(s)?.takeUnretainedValue()
+                else { continue }
+
+                let raw = Unmanaged.passUnretained(result).toOpaque()
+                let ref = unsafeBitCast(raw, to: IOSurfaceRef.self)
+
+                if IOSurfaceGetWidth(ref) > 0 && IOSurfaceGetHeight(ref) > 0 {
+                    return (ref, descriptor, s)
+                }
             }
         }
 
         throw CaptureError.noFramebuffer("No display port with IOSurface found")
-    }
-
-    private static func extractSurface(from descriptor: NSObject, selector: String)
-        -> IOSurfaceRef?
-    {
-        let s = sel(selector)
-        guard descriptor.responds(to: s),
-            let result = descriptor.perform(s)?.takeUnretainedValue()
-        else { return nil }
-
-        let raw = Unmanaged.passUnretained(result).toOpaque()
-        let surfaceRef = unsafeBitCast(raw, to: IOSurfaceRef.self)
-
-        guard IOSurfaceGetWidth(surfaceRef) > 0 && IOSurfaceGetHeight(surfaceRef) > 0 else {
-            return nil
-        }
-        return surfaceRef
     }
 
     // MARK: - Helpers

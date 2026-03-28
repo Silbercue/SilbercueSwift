@@ -50,25 +50,32 @@ enum VisualTools {
             try FileManager.default.createDirectory(atPath: baselineDir, withIntermediateDirectories: true)
 
             let baselinePath = "\(baselineDir)/\(sanitize(name)).png"
-            let tmpPath = "/tmp/ss-baseline-\(UUID().uuidString).png"
 
-            // Capture screenshot
-            let result = try await Shell.xcrun(
-                timeout: 10,
-                "simctl", "io", sim, "screenshot",
-                "--type=png",
-                tmpPath
-            )
-            guard result.succeeded else {
-                return .fail("Screenshot failed: \(result.stderr)")
+            // Capture screenshot — burst (CoreSimulator) or simctl fallback
+            let cgImage: CGImage
+            if CoreSimCapture.isAvailable, let img = try? CoreSimCapture.captureImage(simulator: sim)
+            {
+                cgImage = img
+            } else {
+                // simctl fallback
+                let tmpPath = "/tmp/ss-baseline-\(UUID().uuidString).png"
+                let result = try await Shell.xcrun(
+                    timeout: 10, "simctl", "io", sim, "screenshot", "--type=png", tmpPath)
+                guard result.succeeded else {
+                    return .fail("Screenshot failed: \(result.stderr)")
+                }
+                guard let loaded = loadCGImage(path: tmpPath) else {
+                    return .fail("Failed to load screenshot")
+                }
+                cgImage = loaded
             }
 
-            // Move to baseline location
+            // Save as PNG baseline
             let fm = FileManager.default
             if fm.fileExists(atPath: baselinePath) {
                 try fm.removeItem(atPath: baselinePath)
             }
-            try fm.moveItem(atPath: tmpPath, toPath: baselinePath)
+            savePNG(image: cgImage, path: baselinePath)
 
             let fileSize = (try? fm.attributesOfItem(atPath: baselinePath)[.size] as? Int) ?? 0
             return .ok("Baseline saved: \(baselinePath)\nSize: \(fileSize / 1024)KB")
@@ -98,23 +105,26 @@ enum VisualTools {
         }
 
         do {
-            // Capture current screenshot
-            let result = try await Shell.xcrun(
-                timeout: 10,
-                "simctl", "io", sim, "screenshot",
-                "--type=png",
-                currentPath
-            )
-            guard result.succeeded else {
-                return .fail("Screenshot failed: \(result.stderr)")
+            // Capture current screenshot — burst or simctl fallback
+            let currentImage: CGImage
+            if CoreSimCapture.isAvailable, let img = try? CoreSimCapture.captureImage(simulator: sim)
+            {
+                currentImage = img
+            } else {
+                let result = try await Shell.xcrun(
+                    timeout: 10, "simctl", "io", sim, "screenshot", "--type=png", currentPath)
+                guard result.succeeded else {
+                    return .fail("Screenshot failed: \(result.stderr)")
+                }
+                guard let loaded = loadCGImage(path: currentPath) else {
+                    return .fail("Failed to load current screenshot")
+                }
+                currentImage = loaded
             }
 
-            // Load both images
+            // Load baseline
             guard let baselineImage = loadCGImage(path: baselinePath) else {
                 return .fail("Failed to load baseline image: \(baselinePath)")
-            }
-            guard let currentImage = loadCGImage(path: currentPath) else {
-                return .fail("Failed to load current screenshot")
             }
 
             // Compare
