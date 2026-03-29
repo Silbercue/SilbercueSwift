@@ -5,3 +5,6 @@ DerivedData/
 .build/
 *.swp
 .DS_Store
+SilbercueSwiftMCP/.mcpregistry_github_token
+SilbercueSwiftMCP/.mcpregistry_registry_token
+.mcpregistry_*
