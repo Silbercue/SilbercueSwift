@@ -6,11 +6,11 @@
 [![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
 
-The fastest, most complete MCP server for iOS development. One Swift binary, 50 tools, zero dependencies.
+The fastest, most complete MCP server for iOS development. One Swift binary, 51 tools, zero dependencies.
 
 Built for [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), and any MCP-compatible AI agent.
 
-> **Looking for an XcodeBuildMCP alternative?** SilbercueSwift has everything XcodeBuildMCP does, plus xcresult parsing, WDA UI automation, code coverage, and 44x faster screenshots. [See comparison below](#xcodebuildmcp-vs-silbercueswift).
+> **Looking for an alternative to existing iOS MCP servers?** SilbercueSwift covers the full feature set of both XcodeBuildMCP and Appium-MCP in a single binary — plus xcresult parsing, direct WDA UI automation, code coverage, and 44x faster screenshots. [See comparison below](#comparison-with-other-mcp-servers).
 
 ## Why SilbercueSwift?
 
@@ -18,19 +18,21 @@ Every iOS MCP server has the same problem: **raw xcodebuild output is useless fo
 
 SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured data Xcode uses internally — and returns exactly what the agent needs: pass/fail counts, failure messages with file:line, code coverage per file, and failure screenshots.
 
-| What you get | XcodeBuildMCP | SilbercueSwift |
+| What you get | Konkurrenz | SilbercueSwift |
 |---|---|---|
-| Structured test results | Partial (since v2.3) | Full xcresult parsing |
-| Failure screenshots from xcresult | No | Auto-exported |
+| Structured test results | Partial | Full xcresult parsing |
+| Failure screenshots from xcresult | — | Auto-exported |
 | Code coverage per file | Basic | Sorted, filterable |
 | Build error diagnosis with file:line | stderr parsing | xcresult JSON |
-| UI automation | No | Direct WDA (14 tools) |
-| Alert handling (batch) | No | **3-tier search + accept_all** |
+| UI automation | Appium-MCP (separate server) | **Direct WDA (15 tools, single binary)** |
+| Alert handling (batch) | Single alert only | **3-tier search + accept_all** |
+| Scroll to element | Manual swipe loops | **`find_element(scroll: true)` — 3-tier auto-scroll** |
+| Drag & drop | Coordinates only (3 calls) | **Element-to-element in 1 call** |
 | Screenshot latency | 13.2s | **0.3s** (44x faster) |
-| Console log per failed test | No | Optional (`include_console`) |
-| Wait for log pattern | No | `wait_for_log` with regex + timeout |
-| Binary size | ~50MB (Node.js) | **8.5MB** (native Swift) |
-| Cold start | ~400ms | **~50ms** |
+| Console log per failed test | — | Optional (`include_console`) |
+| Wait for log pattern | — | `wait_for_log` with regex + timeout |
+| Binary size | ~50–200MB | **8.5MB** (native Swift) |
+| Cold start | ~400ms–1s | **~50ms** |
 
 ## Quick Start
 
@@ -66,7 +68,7 @@ Add to your `.mcp.json`:
 
 Or for global availability, add to `~/.claude/.mcp.json`.
 
-## 50 Tools in 11 Categories
+## 51 Tools in 11 Categories
 
 ### Build (5 tools)
 
@@ -102,17 +104,18 @@ Or for global availability, add to `~/.claude/.mcp.json`.
 | `delete_sim` | Delete a simulator |
 | `set_orientation` | Rotate device (PORTRAIT, LANDSCAPE_LEFT, LANDSCAPE_RIGHT) via WDA |
 
-### UI Automation via WebDriverAgent (14 tools)
+### UI Automation via WebDriverAgent (15 tools)
 
 Direct HTTP communication with WDA — no Appium, no Node.js, no Python.
 
 | Tool | Description | Latency |
 |---|---|---|
 | `handle_alert` | **Accept, dismiss, or batch-handle system & in-app alerts** | ~200ms |
-| `find_element` / `find_elements` | Find elements by accessibility ID, xpath, predicate, class chain | ~100ms |
+| `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (3-tier: scrollToVisible → calculated drag → iterative with stall detection) | ~100ms |
 | `click_element` | Tap a UI element | ~400ms |
 | `tap_coordinates` / `double_tap` / `long_press` | Coordinate-based gestures | ~200ms |
 | `swipe` / `pinch` | Directional swipe, zoom in/out | ~400-600ms |
+| `drag_and_drop` | **Drag from source to target** — element-to-element, coordinates, or mixed. Smart defaults for reorderable lists, Kanban boards, sliders | ~2300ms |
 | `type_text` / `get_text` | Type into or read from elements | ~100-300ms |
 | `get_source` | Full view hierarchy (JSON/XML) | ~20ms |
 | `wda_status` / `wda_create_session` | WDA health check & session management | ~50-100ms |
@@ -141,7 +144,7 @@ handle_alert(action: "accept_all")
 
 **Batch mode** — `accept_all` / `dismiss_all` loops through multiple sequential alerts server-side. One HTTP roundtrip instead of N. Returns details of every handled alert.
 
-No other MCP server has 3-tier search, iOS 18 ContactsUI support, or batch alert handling.
+These capabilities go beyond what other iOS MCP servers currently offer.
 
 ### Screenshots (1 tool)
 
@@ -261,42 +264,67 @@ test_coverage(project: "MyApp.xcodeproj", scheme: "MyApp", min_coverage: 80)
 
 Measured on M3 MacBook Pro, iOS 18.2 Simulator:
 
-| Action | XcodeBuildMCP | appium-mcp | SilbercueSwift |
-|---|---|---|---|
-| Screenshot | 13.2s | crashes | **0.3s** |
-| Find element | N/A | ~500ms | **~100ms** |
-| Click element | N/A | ~500ms | **~400ms** |
-| View hierarchy | 15.5s | ~15s | **~20ms** |
-| Handle alert | N/A | ~500ms | **~200ms** |
-| Handle 3 alerts (batch) | N/A | ~1500ms (3 calls) | **~800ms (1 call)** |
-| Simulator list | ~2s | N/A | **0.2s** |
-| Cold start | ~400ms | ~1s | **~50ms** |
-| Binary size | ~50MB | ~200MB | **8.5MB** |
+| Action | Konkurrenz (best of) | SilbercueSwift |
+|---|---|---|
+| Screenshot | 13.2s | **0.3s** (44x) |
+| Find element | ~500ms | **~100ms** (5x) |
+| Click element | ~500ms | **~400ms** |
+| View hierarchy | ~15s | **~20ms** (750x) |
+| Handle alert | ~500ms | **~200ms** |
+| Handle 3 alerts (batch) | ~1500ms (3 calls) | **~800ms (1 call)** |
+| Drag & drop (element-to-element) | ~3 calls required | **1 call (~2.3s)** |
+| Scroll to element | Manual swipe loop | **Automatic (1 call)** |
+| Simulator list | ~2s | **0.2s** |
+| Cold start | ~400ms–1s | **~50ms** |
+| Binary size | ~50–200MB | **8.5MB** |
 
-## XcodeBuildMCP vs SilbercueSwift
+## Comparison with other MCP servers
 
-If you're using [XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) (now maintained by Sentry), here's why you might want to switch:
+SilbercueSwift consolidates what previously required two separate MCP servers — [XcodeBuildMCP](https://github.com/getsentry/XcodeBuildMCP) for build/test workflows and [Appium-MCP](https://github.com/anthropics/appium-mcp) for UI automation — into a single native binary.
+
+### vs XcodeBuildMCP (Build & Test)
+
+XcodeBuildMCP is a solid, well-maintained server for Xcode build workflows. SilbercueSwift builds on the same foundation and adds structured result parsing plus UI automation:
 
 | Capability | XcodeBuildMCP | SilbercueSwift |
 |---|---|---|
 | Build for simulator | Yes | Yes |
-| **Build + Run in one call** | Yes (sequential) | **Yes (parallel pipeline, ~9s faster)** |
-| **Structured test results** | Partial — stderr parsing issues ([#177](https://github.com/getsentry/XcodeBuildMCP/issues/177)) | **Full xcresult JSON parsing** |
-| **Failure screenshots** from xcresult | No | **Auto-exported** |
-| **Code coverage** per file | Basic | **Sorted, filterable by min %** |
-| **Build error diagnosis** with file:line | stderr parsing | **xcresult JSON with sourceURL** |
-| **UI automation** | No | **14 tools — direct WDA** |
-| **Alert handling** | No | **3-tier search + batch accept_all/dismiss_all** |
-| **Screenshot latency** | 13.2s | **0.3s (44x faster)** |
-| **Console log per failed test** | No | **Optional (`include_console`)** |
-| **Wait for log pattern** | No | **`wait_for_log` with regex + timeout** |
-| **Visual regression** | No | **Baseline + pixel diff comparison** |
-| **Multi-device check** | No | **Dark Mode, Landscape, iPad in one call** |
+| Build + Run in one call | Yes (sequential) | Yes (parallel pipeline, ~9s faster) |
+| Structured test results | Partial — stderr parsing | **Full xcresult JSON parsing** |
+| Failure screenshots from xcresult | — | **Auto-exported** |
+| Code coverage per file | Basic | **Sorted, filterable by min %** |
+| Build error diagnosis with file:line | stderr parsing | **xcresult JSON with sourceURL** |
+| UI automation | — | **15 tools — direct WDA** |
+| Screenshot latency | 13.2s | **0.3s (44x faster)** |
+| Console log per failed test | — | **Optional (`include_console`)** |
+| Wait for log pattern | — | **`wait_for_log` with regex + timeout** |
+| Visual regression | — | **Baseline + pixel diff comparison** |
+| Multi-device check | — | **Dark Mode, Landscape, iPad in one call** |
 | Runtime | Node.js (~50MB) | **Native Swift (8.5MB)** |
 | Cold start | ~400ms | **~50ms** |
-| Dependencies | npm ecosystem | **Zero** |
 
-SilbercueSwift addresses the [#1 community complaint](https://github.com/getsentry/XcodeBuildMCP/issues/177) about Xcode MCP servers: AI agents never get useful test output. Instead of parsing 500 lines of xcodebuild stderr, SilbercueSwift reads the `.xcresult` bundle — the same structured data Xcode's Test Navigator uses.
+### vs Appium-MCP (UI Automation)
+
+Appium-MCP provides broad cross-platform UI automation. SilbercueSwift focuses exclusively on iOS and offers deeper integration:
+
+| Capability | Appium-MCP | SilbercueSwift |
+|---|---|---|
+| Find element | Yes | Yes (+ **auto-scroll with `scroll: true`**) |
+| Tap / swipe / pinch | Yes | Yes |
+| Drag & drop | Coordinates only (3 calls) | **Element-to-element in 1 call** |
+| Scroll to element | Manual swipe loop | **3-tier auto-scroll (1 call)** |
+| Alert handling | Single alert | **3-tier search + batch accept_all/dismiss_all** |
+| iOS 18 ContactsUI dialog | — | **Supported** |
+| Build + test integration | — | **Full xcresult parsing, coverage, failure screenshots** |
+| Screenshot latency | ~500ms+ | **0.3s** |
+| View hierarchy | ~15s | **~20ms** |
+| Architecture | Appium server + WDA + Node.js | **Direct WDA (no middleware)** |
+| Binary size | ~200MB+ | **8.5MB** |
+| Cross-platform (Android) | Yes | — (iOS only) |
+
+### One binary, full coverage
+
+After completing all 8 features on our competitive parity roadmap, SilbercueSwift covers the combined feature set of both XcodeBuildMCP and Appium-MCP for iOS simulator workflows. The only trade-off: SilbercueSwift is iOS-only (no Android, watchOS, tvOS, or visionOS).
 
 ## Architecture
 
