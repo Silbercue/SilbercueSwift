@@ -6,7 +6,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
 
-The fastest, most complete MCP server for iOS development. One Swift binary, 51 tools, zero dependencies.
+The fastest, most complete MCP server for iOS development. One Swift binary, 51 tools, zero dependencies. **SilbercueSwift has the most complete toolset of any alternative out there.**
 
 Built for [Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.sh), and any MCP-compatible AI agent.
 
