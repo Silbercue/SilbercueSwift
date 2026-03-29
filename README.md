@@ -35,6 +35,7 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Screenshot latency | 13.2s | ~500ms+ | **0.3s (44x)** |
 | View hierarchy | 15.5s | ~15s | **~20ms (750x)** |
 | Console log per failed test | — | — | **Optional** |
+| Log noise filtering | Subsystem only (bundleId required) | — | **3-mode smart filter (auto-detected, no param needed)** |
 | Wait for log pattern | — | — | **Regex + timeout** |
 | Visual regression | — | — | **Baseline + pixel diff** |
 | Multi-device check | — | — | **Dark Mode, Landscape, iPad** |
@@ -55,6 +56,10 @@ When a test fails, the agent gets the error message, the exact file:line, a scre
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Single binary, zero dependencies** — install in 10 seconds
 
 `brew install silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
+
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Smart log filtering — 95% less noise, zero config** — agents read only what matters
+
+When an agent reads simulator logs, 95% is system noise — `proactiveeventtrackerd`, `locationd`, `mediaanalysisd`. SilbercueSwift's `start_log_capture` defaults to `app` mode: it auto-detects the app's bundle ID and process name from the last build, filters server-side in `logd` (79% I/O reduction), passes through crashes from any process, and deduplicates repetitive lines. The competition either requires a mandatory `bundleId` parameter or has no log filtering at all.
 
 > ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **One call to dismiss all permission dialogs** — 3 alerts in 1 roundtrip
 
@@ -194,10 +199,33 @@ These capabilities go beyond what other iOS MCP servers currently offer.
 
 | Tool | Description |
 |---|---|
-| `start_log_capture` | Real-time os_log stream |
+| `start_log_capture` | **Smart-filtered os_log stream** — 3 modes: `app` (default, auto-detected), `smart` (noise blacklist), `verbose` (unfiltered). Deduplicates repetitive lines. |
 | `stop_log_capture` | Stop capture |
-| `read_logs` | Read captured lines (last N, clear buffer) |
+| `read_logs` | Read captured lines (last N, clear buffer). Consecutive identical lines shown as `... repeated Nx`. |
 | `wait_for_log` | Wait for regex pattern with timeout — eliminates sleep() hacks |
+
+#### Smart Log Filtering
+
+```bash
+# Default: only your app's logs + crashes (auto-detected from last build_sim)
+start_log_capture()
+
+# System-wide minus noise (11 known noise processes excluded server-side)
+start_log_capture(mode: "smart")
+
+# Filter by process name (most efficient, server-side in logd)
+start_log_capture(process: "MyApp")
+
+# Bypass mode logic with explicit predicate
+start_log_capture(subsystem: "com.apple.SwiftUI")
+```
+
+**3 filter modes:**
+- **`app`** (default) — Auto-detects bundle ID + process name from last build. Catches `os_log`, `print()`, and `NSLog()`. Passes through `fault`-level logs from any process so crashes are never missed.
+- **`smart`** — Excludes 11 measured noise processes (`proactiveeventtrackerd` alone is 64% of idle logs). Server-side filtering in `logd` — 79% I/O reduction.
+- **`verbose`** — Unfiltered stream for system-level debugging.
+
+**Buffer deduplication** — 60 identical heartbeat lines become 2: the line itself + `... repeated 59x`.
 
 ### Console (3 tools)
 
@@ -332,7 +360,7 @@ SilbercueSwift (8.5MB Swift binary)
     ├── SimTools         → simctl + WDA orientation
     ├── ScreenshotTools  → CoreSimulator IOSurface → ScreenCaptureKit → simctl
     ├── UITools          → WebDriverAgent (direct HTTP, 3-tier alert search)
-    ├── LogTools         → log stream + regex pattern matching
+    ├── LogTools         → log stream + 3-mode smart filter + dedup + regex matching
     ├── ConsoleTools     → stdout/stderr capture
     ├── VisualTools      → pixel diff + layout scoring
     ├── MultiDeviceTools → parallel sim checks
