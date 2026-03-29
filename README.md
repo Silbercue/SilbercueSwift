@@ -44,15 +44,33 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 
 ### Where SilbercueSwift really shines
 
-**Screenshots in 0.3s instead of 13s** — SilbercueSwift reads the simulator framebuffer directly via CoreSimulator's IOSurface API. No simctl subprocess, no PNG round-trip. The agent gets a screenshot in 300ms. With the competition, it takes 13 seconds — long enough for the agent to lose context.
+> **Killer Feature** — Screenshots in 0.3s instead of 13s
 
-**One call to dismiss all permission dialogs** — Every app shows 2–3 permission dialogs on first launch. Other servers require the agent to screenshot → find button → click, per dialog. `handle_alert(action: "accept_all")` clears them all in a single call, searching across SpringBoard, ContactsUI, and the active app.
+SilbercueSwift reads the simulator framebuffer directly via CoreSimulator's IOSurface API. No simctl subprocess, no PNG round-trip. The agent gets a screenshot in 300ms. With the competition, it takes 13 seconds — long enough for the agent to lose context. At 44x faster, agents can take screenshots freely without penalty.
 
-**Drag & drop with element IDs** — "Drag item A above item B" is a single call: `drag_and_drop(source_element: "el-0", target_element: "el-1")`. The competition only supports raw coordinates, forcing the agent to find both elements, extract their frames, calculate center points, and build a W3C Actions sequence — 3 calls minimum.
+> **Killer Feature** — Structured test results from xcresult bundles
 
-**Auto-scroll to off-screen elements** — `find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. Three fallback strategies ensure it works with UIKit, SwiftUI, and lazy-loaded lists. No manual swipe loops, no guessing scroll direction.
+When a test fails, the agent gets the error message, the exact file:line, a screenshot of the failure state, and optionally the console output — all parsed from Apple's `.xcresult` format. No guessing from 500 lines of xcodebuild stderr. This is the difference between "agent knows what broke" and "agent guesses what broke".
 
-**Test failures with screenshots and console logs** — When a test fails, the agent gets the error message, the exact file:line, a screenshot of the failure state, and optionally the console output — all from one `test_failures` call. No parsing of 500-line xcodebuild logs.
+> **Killer Feature** — Single binary, zero dependencies
+
+`brew install silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
+
+> **Strong** — One call to dismiss all permission dialogs
+
+Every app shows 2–3 permission dialogs on first launch. Other servers require the agent to screenshot → find button → click, per dialog. `handle_alert(action: "accept_all")` clears them all in a single call, searching across SpringBoard, ContactsUI, and the active app.
+
+> **Strong** — Drag & drop with element IDs
+
+"Drag item A above item B" is a single call: `drag_and_drop(source_element: "el-0", target_element: "el-1")`. The competition only supports raw coordinates, forcing the agent to find both elements, extract their frames, and build a W3C Actions sequence — 3 calls minimum.
+
+> **Strong** — Auto-scroll to off-screen elements
+
+`find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. Three fallback strategies ensure it works with UIKit, SwiftUI, and lazy-loaded lists. No manual swipe loops, no guessing scroll direction.
+
+> **Strong** — View hierarchy in 20ms (750x faster)
+
+`get_source` returns the full UI tree in ~20ms. The competition takes 15 seconds. This makes element inspection practically free for agents.
 
 ## Quick Start
 
