@@ -15,7 +15,11 @@ actor LogCapture {
     private var lastMessageContent: String?
     private var repeatCount: Int = 0
 
-    func start(arguments: [String]) throws {
+    /// The capture mode used when start() was called (for topic-filter warnings)
+    private(set) var captureMode: String = "smart"
+
+    func start(arguments: [String], mode: String = "smart") throws {
+        self.captureMode = mode
         // Stop existing capture (flushes dedup state)
         stop()
 
@@ -121,10 +125,246 @@ enum LogTools {
     // MARK: - Noise blacklist (measured on iOS 26.4 idle simulator, >90% of noise)
 
     static let noiseProcesses = [
+        // v1.1.0 (11)
         "proactiveeventtrackerd", "locationd", "mediaanalysisd",
         "apsd", "cfprefsd", "pairedsyncd", "mDNSResponder",
         "backboardd", "DTServiceHub", "geod", "itunesstored",
+        // v1.2.0 — verified guaranteed noise (4)
+        "geoanalyticsd", "UserEventAgent", "fontservicesd", "amsengagementd",
     ]
+
+    static let noiseSubsystems = ["com.apple.defaults"]
+
+    static let noiseSubsystemCategories: [(subsystem: String, category: String)] = [
+        (subsystem: "com.apple.network", category: "endpoint"),  // 42% of noise
+    ]
+
+    // MARK: - Topic system for read-time filtering
+
+    struct ParsedLogLine {
+        let processName: String   // "locationd", "SpringBoard", "MyApp"
+        let logType: String       // "Db", "Df", "De", "Di"
+        let subsystem: String?    // "com.apple.locationd.Motion" (nil if missing)
+        let category: String?     // "Motion", "endpoint" (nil if missing)
+    }
+
+    /// O(1) topic lookup for known processes
+    static let processTopics: [String: String] = [
+        "trustd": "network", "nsurlsessiond": "network",
+        "runningboardd": "lifecycle",
+        "SpringBoard": "springboard",
+        "chronod": "widgets",
+    ]
+
+    /// Parse a compact-format log line into its components.
+    /// Returns nil for headers, dedup lines, and unparseable lines.
+    ///
+    /// Format: `YYYY-MM-DD HH:MM:SS.mmm Ty  Process[PID:TID] [subsystem:category] message`
+    /// or:     `YYYY-MM-DD HH:MM:SS.mmm Ty  Process[PID:TID] (Framework) message`
+    static func parseLine(_ line: String) -> ParsedLogLine? {
+        // Skip dedup lines and headers
+        guard !line.isEmpty,
+              !line.hasPrefix("  "),           // "  ... repeated Nx"
+              !line.hasPrefix("Timestamp"),     // header line
+              line.count > 26                   // minimum: timestamp(23) + space + Ty(2)
+        else { return nil }
+
+        let chars = Array(line.unicodeScalars)
+
+        // Position 24-25: log type (Db, Df, De, Di)
+        guard chars.count > 25 else { return nil }
+        let logType = String(chars[24...25].map { Character($0) })
+
+        // After log type + whitespace: process name until '[' or '('
+        var idx = 26
+        // Skip whitespace
+        while idx < chars.count && (chars[idx] == " " || chars[idx] == "\t") {
+            idx += 1
+        }
+        guard idx < chars.count else { return nil }
+
+        // Collect process name
+        let procStart = idx
+        while idx < chars.count && chars[idx] != "[" && chars[idx] != "(" && chars[idx] != " " {
+            idx += 1
+        }
+        guard idx > procStart else { return nil }
+        let processName = String(chars[procStart..<idx].map { Character($0) })
+
+        // Skip PID:TID block [xxxxx:yyyyy]
+        if idx < chars.count && chars[idx] == "[" {
+            while idx < chars.count && chars[idx] != "]" { idx += 1 }
+            if idx < chars.count { idx += 1 } // skip ']'
+        }
+
+        // Skip whitespace
+        while idx < chars.count && chars[idx] == " " { idx += 1 }
+
+        // Optional [subsystem:category]
+        var subsystem: String?
+        var category: String?
+        if idx < chars.count && chars[idx] == "[" {
+            idx += 1 // skip '['
+            let subStart = idx
+            while idx < chars.count && chars[idx] != ":" && chars[idx] != "]" { idx += 1 }
+            subsystem = String(chars[subStart..<idx].map { Character($0) })
+
+            if idx < chars.count && chars[idx] == ":" {
+                idx += 1
+                let catStart = idx
+                while idx < chars.count && chars[idx] != "]" { idx += 1 }
+                category = String(chars[catStart..<idx].map { Character($0) })
+            }
+        }
+
+        return ParsedLogLine(processName: processName, logType: logType,
+                             subsystem: subsystem, category: category)
+    }
+
+    /// Categorize a parsed log line into topic(s).
+    /// Always includes `app` (if matching) and `crashes` (if fault). Returns `system` as fallback.
+    static func categorize(_ parsed: ParsedLogLine, bundleId: String?, processName: String?) -> Set<String> {
+        var topics = Set<String>()
+
+        // app: subsystem matches bundleId OR process matches processName
+        if let bid = bundleId, let sub = parsed.subsystem, sub == bid {
+            topics.insert("app")
+        }
+        if let pname = processName, parsed.processName == pname {
+            topics.insert("app")
+        }
+
+        // crashes: fault level
+        if parsed.logType == "Df" {
+            topics.insert("crashes")
+        }
+
+        // Process-based topics (O(1) lookup)
+        if let topic = processTopics[parsed.processName] {
+            topics.insert(topic)
+        }
+
+        // Subsystem-prefix-based topics
+        if let sub = parsed.subsystem {
+            if sub.hasPrefix("com.apple.runningboard") {
+                topics.insert("lifecycle")
+            }
+            if sub.hasPrefix("com.apple.xpc.activity") {
+                topics.insert("background")
+            }
+        }
+
+        // system fallback: if no other topic matched
+        if topics.isEmpty {
+            topics.insert("system")
+        }
+
+        return topics
+    }
+
+    // MARK: - Topic filtering
+
+    /// All known topic names in display order
+    static let allTopics = ["app", "crashes", "network", "lifecycle", "springboard", "widgets", "background", "system"]
+
+    /// Topic descriptions for LLM hint
+    static let topicHints: [String: String] = [
+        "network": "SSL/TLS + background transfers",
+        "lifecycle": "app kills, Jetsam, memory pressure",
+        "springboard": "push notifications, app state",
+        "widgets": "WidgetKit timeline, refresh budget",
+        "background": "BGTaskScheduler, background fetch",
+        "system": "WARNING: high volume, system internals",
+    ]
+
+    struct TopicFilterResult {
+        let filteredLines: [String]
+        let topicCounts: [String: Int]
+        let totalLines: Int
+    }
+
+    /// Single-pass filter: categorize each line, count topics, collect matching lines.
+    static func filterByTopics(
+        lines: [String],
+        include: Set<String>,
+        bundleId: String?,
+        processName: String?
+    ) -> TopicFilterResult {
+        var counts: [String: Int] = [:]
+        for t in allTopics { counts[t] = 0 }
+
+        var filtered: [String] = []
+        var lastTopics: Set<String> = []
+
+        for line in lines {
+            let topics: Set<String>
+
+            if line.hasPrefix("  ") {
+                // Dedup line ("  ... repeated Nx") — inherits previous line's topics
+                topics = lastTopics
+            } else if let parsed = parseLine(line) {
+                topics = categorize(parsed, bundleId: bundleId, processName: processName)
+                lastTopics = topics
+            } else {
+                continue // header or unparseable
+            }
+
+            // Update counts
+            for t in topics {
+                counts[t, default: 0] += 1
+            }
+
+            // Include if any topic matches
+            if !topics.isDisjoint(with: include) {
+                filtered.append(line)
+            }
+        }
+
+        return TopicFilterResult(filteredLines: filtered, topicCounts: counts, totalLines: lines.count)
+    }
+
+    /// Build the topic summary header for read_logs response.
+    static func buildTopicSummary(
+        result: TopicFilterResult,
+        include: Set<String>,
+        captureMode: String,
+        bundleId: String?
+    ) -> String {
+        let shownTopics = include.sorted().joined(separator: ", ")
+        var lines: [String] = []
+
+        lines.append("--- \(result.totalLines) buffered, \(result.filteredLines.count) shown [\(shownTopics)] ---")
+
+        // Topic counts: active first, then available
+        let active = allTopics.filter { include.contains($0) }
+            .map { "\($0)(\(result.topicCounts[$0] ?? 0))" }
+        let available = allTopics.filter { !include.contains($0) }
+            .map { "\($0)(\(result.topicCounts[$0] ?? 0))" }
+        lines.append("Topics: \(active.joined(separator: " ")) | \(available.joined(separator: " "))")
+
+        // Hint for hidden topics with lines
+        let hiddenWithLines = allTopics.filter { !include.contains($0) && (result.topicCounts[$0] ?? 0) > 0 }
+        if !hiddenWithLines.isEmpty {
+            let hintTopics = hiddenWithLines.prefix(3).map { topic in
+                if let desc = topicHints[topic] { return "\(topic) (\(desc))" }
+                return topic
+            }
+            lines.append("Hint: include=[\(hiddenWithLines.prefix(3).map { "\"\($0)\"" }.joined(separator: ","))] to add \(hintTopics.joined(separator: ", ")) logs")
+        }
+
+        // Warning: capture mode mismatch
+        if captureMode == "app" && include.count > 2 {
+            lines.append("WARNING: capture mode is 'app' — only app logs are in the stream. Use start_log_capture mode='smart' for topic filtering.")
+        }
+
+        // Warning: no bundleId
+        if bundleId == nil {
+            lines.append("Note: no bundleId in session — 'app' topic may be empty. Run build_sim first.")
+        }
+
+        lines.append("---")
+        return lines.joined(separator: "\n")
+    }
 
     // MARK: - Process name derivation
 
@@ -214,10 +454,14 @@ enum LogTools {
         }
     }
 
-    /// Build the NOT predicate that excludes known noise processes.
+    /// Build the NOT predicate that excludes known noise processes, subsystems, and categories.
     static func smartModePredicate() -> String {
-        let exclusions = noiseProcesses.map { "process == '\($0)'" }.joined(separator: " OR ")
-        return "NOT (\(exclusions))"
+        var exclusions = noiseProcesses.map { "process == '\($0)'" }
+        exclusions += noiseSubsystems.map { "subsystem == '\($0)'" }
+        exclusions += noiseSubsystemCategories.map {
+            "(subsystem == '\($0.subsystem)' AND category == '\($0.category)')"
+        }
+        return "NOT (\(exclusions.joined(separator: " OR ")))"
     }
 
     // MARK: - Tool definitions
@@ -227,8 +471,8 @@ enum LogTools {
             name: "start_log_capture",
             description: """
                 Start capturing real-time logs from a simulator with smart filtering. \
-                Modes: 'app' (default) — only your app's logs + crashes, auto-detected from last build. \
-                'smart' — system-wide minus known noise (locationd, proactiveeventtrackerd, etc.). \
+                Modes: 'smart' (default) — system-wide minus known noise, enables topic filtering in read_logs. \
+                'app' — only your app's logs + crashes (tight stream, but limits topic filtering). \
                 'verbose' — unfiltered, all system logs. \
                 Override: set 'subsystem' or 'predicate' to bypass mode logic entirely. \
                 Deduplicates consecutive identical log lines automatically.
@@ -257,13 +501,20 @@ enum LogTools {
         Tool(
             name: "read_logs",
             description: """
-                Read captured log lines. Consecutive identical lines are auto-deduplicated \
-                (shown as '... repeated Nx'). Optionally get only the last N lines or clear after reading.
+                Read captured log lines with topic-based filtering. \
+                Default shows only app logs + crashes. Response includes a topic menu with line counts — \
+                add topics via 'include' to see more (e.g. network for SSL, lifecycle for Jetsam). \
+                Topics reset each call (stateless). Consecutive identical lines are auto-deduplicated.
                 """,
             inputSchema: .object([
                 "type": .string("object"),
                 "properties": .object([
-                    "last": .object(["type": .string("number"), "description": .string("Only return last N lines")]),
+                    "include": .object([
+                        "type": .string("array"),
+                        "description": .string("Topics to add: network, lifecycle, springboard, widgets, background, system. Default: app + crashes only."),
+                        "items": .object(["type": .string("string")]),
+                    ]),
+                    "last": .object(["type": .string("number"), "description": .string("Only return last N lines (applied after topic filtering)")]),
                     "clear": .object(["type": .string("boolean"), "description": .string("Clear buffer after reading. Default: false")]),
                 ]),
             ])
@@ -298,7 +549,7 @@ enum LogTools {
         } catch {
             return .fail("\(error)")
         }
-        let mode = args?["mode"]?.stringValue ?? "app"
+        let mode = args?["mode"]?.stringValue ?? "smart"
         let process = args?["process"]?.stringValue
         let subsystem = args?["subsystem"]?.stringValue
         let predicate = args?["predicate"]?.stringValue
@@ -310,7 +561,7 @@ enum LogTools {
         )
 
         do {
-            try await LogCapture.shared.start(arguments: logArgs)
+            try await LogCapture.shared.start(arguments: logArgs, mode: mode)
             return .ok("Log capture started (\(note))")
         } catch {
             return .fail("Failed to start log capture: \(error)")
@@ -326,21 +577,57 @@ enum LogTools {
         let last = args?["last"]?.intValue
         let clear = args?["clear"]?.boolValue ?? false
 
-        let isRunning = await LogCapture.shared.isRunning
-        let lines: [String]
-        if clear {
-            lines = await LogCapture.shared.readAndClear()
-        } else {
-            lines = await LogCapture.shared.read(last: last)
+        // Parse include topics — support array or single string (LLM error tolerance)
+        var includeTopics: Set<String> = ["app", "crashes"]
+        if let arr = args?["include"]?.arrayValue {
+            for v in arr {
+                if let s = v.stringValue { includeTopics.insert(s) }
+            }
+        } else if let single = args?["include"]?.stringValue {
+            includeTopics.insert(single)
         }
 
-        if lines.isEmpty {
+        let isRunning = await LogCapture.shared.isRunning
+        let captureMode = await LogCapture.shared.captureMode
+        let allLines: [String]
+        if clear {
+            allLines = await LogCapture.shared.readAndClear()
+        } else {
+            allLines = await LogCapture.shared.read(last: nil) // read all for filtering
+        }
+
+        if allLines.isEmpty {
             return .ok("No log lines captured" + (isRunning ? " (capture is running)" : " (capture not running)"))
         }
 
-        let output = lines.joined(separator: "\n")
+        // Get session info for topic categorization
+        let bundleId = await SessionState.shared.bundleId
+        let appPath = await SessionState.shared.appPath
+        let processName = appPath.flatMap { deriveProcessName(from: $0) }
+
+        // Filter by topics
+        let filterResult = filterByTopics(
+            lines: allLines, include: includeTopics,
+            bundleId: bundleId, processName: processName
+        )
+
+        // Apply `last` AFTER filtering
+        let finalLines: [String]
+        if let n = last {
+            finalLines = Array(filterResult.filteredLines.suffix(n))
+        } else {
+            finalLines = filterResult.filteredLines
+        }
+
+        // Build summary header
+        let summary = buildTopicSummary(
+            result: filterResult, include: includeTopics,
+            captureMode: captureMode, bundleId: bundleId
+        )
+
+        let output = finalLines.joined(separator: "\n")
         let truncated = output.count > 50000 ? String(output.prefix(50000)) + "\n... [truncated]" : output
-        return .ok("\(lines.count) log lines\(clear ? " (buffer cleared)" : ""):\n\(truncated)")
+        return .ok("\(summary)\n\(truncated)")
     }
 
     static func waitForLog(_ args: [String: Value]?) async -> CallTool.Result {

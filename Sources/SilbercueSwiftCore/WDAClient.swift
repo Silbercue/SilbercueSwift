@@ -56,6 +56,10 @@ actor WDAClient {
         self.baseURL = url
     }
 
+    func getBaseURL() -> String {
+        return baseURL
+    }
+
     func setBackend(_ newBackend: WDABackend) {
         self.backend = newBackend
         self.fallbackInfo = nil
@@ -240,21 +244,19 @@ actor WDAClient {
         // Resolve UDID for xcodebuild destination
         let udid = await resolveSimulatorUDID(simulator)
 
-        // Find or create DerivedData for SilbercueWDA
-        let derivedData = await findOrCreateDerivedData(projectDir: projectDir)
+        // Deterministic DerivedData so we know where xctestrun lands
+        let derivedData = NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData/SilbercueWDA-deploy"
 
-        // Step 1: Build with -target (Xcode 26 workaround: -scheme can't find
-        // iOS Simulator destinations for UI testing bundles)
+        // Step 1: build-for-testing with -scheme (resolves SPM) + -sdk (Xcode 26
+        // workaround: -scheme can't find iOS Simulator destinations for UI testing
+        // bundles, but -sdk iphonesimulator without -destination/-arch works)
         let buildArgs = [
-            "xcodebuild",
+            "xcodebuild", "build-for-testing",
             "-project", "\(projectDir)/SilbercueWDA.xcodeproj",
-            "-target", "SilbercueWDARunner",
+            "-scheme", "SilbercueWDARunner",
             "-sdk", "iphonesimulator",
-            "-arch", "arm64",
             "-configuration", "Debug",
-            "SYMROOT=\(derivedData)/Build/Products",
-            "OBJROOT=\(derivedData)/Build/Intermediates.noindex",
-            "build",
+            "-derivedDataPath", derivedData,
         ]
         let buildResult: ShellResult
         do {
@@ -294,26 +296,14 @@ actor WDAClient {
         return false
     }
 
-    /// Find existing DerivedData for SilbercueWDA, or return a predictable path.
-    private func findOrCreateDerivedData(projectDir: String) async -> String {
-        let ddBase = NSHomeDirectory() + "/Library/Developer/Xcode/DerivedData"
-        // Search for existing SilbercueWDA DerivedData
-        if let result = try? await Shell.run("/usr/bin/find", arguments: [
-            ddBase, "-maxdepth", "1", "-name", "SilbercueWDA-*", "-type", "d",
-        ], timeout: 5), result.succeeded {
-            let dirs = result.stdout.split(separator: "\n").map(String.init)
-            if let first = dirs.first { return first }
-        }
-        return ddBase + "/SilbercueWDA-deploy"
-    }
 
-    /// Find the most recent arm64 xctestrun file in DerivedData.
+    /// Find the xctestrun file in DerivedData/Build/Products.
     private func findXctestrun(derivedData: String) async -> String? {
         let productsDir = derivedData + "/Build/Products"
         if let result = try? await Shell.run("/usr/bin/find", arguments: [
-            productsDir, "-name", "*arm64.xctestrun", "-type", "f",
+            productsDir, "-maxdepth", "1", "-name", "*.xctestrun", "-type", "f",
         ], timeout: 5), result.succeeded {
-            let files = result.stdout.split(separator: "\n").map(String.init)
+            let files = result.stdout.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
             return files.first
         }
         return nil

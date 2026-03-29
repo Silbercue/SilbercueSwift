@@ -285,20 +285,37 @@ enum UITools {
     }
 
     static func wdaCreateSession(_ args: [String: Value]?) async -> CallTool.Result {
-        if let url = args?["wda_url"]?.stringValue {
-            await WDAClient.shared.setBaseURL(url)
-        }
-
+        let customURL = args?["wda_url"]?.stringValue
         let bundleId = args?["bundle_id"]?.stringValue
 
+        if let url = customURL {
+            // Per-call override: try custom URL directly, NO deploy attempt.
+            // Save previous URL so we can restore on failure.
+            let previousURL = await WDAClient.shared.getBaseURL()
+            await WDAClient.shared.setBaseURL(url)
+
+            do {
+                // Skip ensureWDARunning — never deploy to a custom URL
+                let sid = try await WDAClient.shared.createSession(bundleId: bundleId)
+                var msg = "Session created: \(sid) (custom WDA: \(url))"
+                if let warning = await WDAClient.shared.sessionWarning {
+                    msg += "\n\(warning)"
+                }
+                return .ok(msg)
+            } catch {
+                // Restore previous URL so default WDA still works
+                await WDAClient.shared.setBaseURL(previousURL)
+                return .fail("Connection to \(url) failed: \(error). Default URL (\(previousURL)) restored.")
+            }
+        }
+
+        // Default path: ensureWDARunning + createSession
         do {
-            // Health-check with auto-restart before creating session
             try await WDAClient.shared.ensureWDARunning()
 
             let sid = try await WDAClient.shared.createSession(bundleId: bundleId)
             var msg = "Session created: \(sid)"
 
-            // Warn if too many sessions are tracked
             if let warning = await WDAClient.shared.sessionWarning {
                 msg += "\n\(warning)"
             }
