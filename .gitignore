@@ -5,6 +5,24 @@ DerivedData/
 .build/
 *.swp
 .DS_Store
+
+# Registry tokens
 SilbercueSwiftMCP/.mcpregistry_github_token
 SilbercueSwiftMCP/.mcpregistry_registry_token
 .mcpregistry_*
+
+# Local development config
+.mcp.json
+.playwright-mcp/
+.claude/
+
+# Internal planning docs (not for public repo)
+FEATURE-EVAL.md
+SS-USP.md
+SS-KILLER-FEATURES.md
+SS-MCP-RECHERCHE.md
+PRD-SMART-CONTEXT.md
+BUGREPORT-*.md
+DIRECTORY-SUBMISSIONS.md
+iOS-ALERTS-RESEARCH-*.md
+prompt.md

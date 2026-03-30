@@ -33,7 +33,12 @@ enum ScreenshotTools {
 
         let start = CFAbsoluteTimeGetCurrent()
 
-        // Fast path: inline capture (macOS 14+)
+        // Free tier: simctl only (~320ms). Pro: 3-tier (IOSurface 15ms → SCKit → simctl).
+        if !(await LicenseManager.shared.isPro) {
+            return await simctlScreenshot(sim: sim, format: format, start: start)
+        }
+
+        // Pro: fast path — inline capture (macOS 14+)
         if #available(macOS 14.0, *) {
             do {
                 let result = try await FramebufferCapture.captureInline(

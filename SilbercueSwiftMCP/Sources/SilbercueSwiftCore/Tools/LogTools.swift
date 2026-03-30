@@ -399,7 +399,8 @@ enum LogTools {
         if subsystem != nil || predicate != nil {
             var predicateParts: [String] = []
             if let sub = subsystem {
-                predicateParts.append("subsystem == '\(sub)'")
+                let sanitized = sub.replacingOccurrences(of: "'", with: "\\'")
+                predicateParts.append("subsystem == '\(sanitized)'")
             }
             if let pred = predicate {
                 predicateParts.append(pred)
@@ -428,12 +429,15 @@ enum LogTools {
 
             if let bid = bundleId, let pname = processName {
                 // Best case: filter by subsystem (os_log) OR process (print/NSLog) + fault passthrough
-                let pred = "(subsystem == '\(bid)' OR process == '\(pname)') OR logType == \"fault\""
+                let safeBid = bid.replacingOccurrences(of: "'", with: "\\'")
+                let safePname = pname.replacingOccurrences(of: "'", with: "\\'")
+                let pred = "(subsystem == '\(safeBid)' OR process == '\(safePname)') OR logType == \"fault\""
                 args += ["--predicate", pred]
                 return (args, "mode: app (subsystem: \(bid), process: \(pname), +faults)")
             } else if let bid = bundleId {
                 // Only bundleId available — subsystem filter + fault passthrough
-                let pred = "subsystem == '\(bid)' OR logType == \"fault\""
+                let safeBid = bid.replacingOccurrences(of: "'", with: "\\'")
+                let pred = "subsystem == '\(safeBid)' OR logType == \"fault\""
                 args += ["--predicate", pred]
                 return (args, "mode: app (subsystem: \(bid), +faults)")
             } else {
@@ -555,6 +559,14 @@ enum LogTools {
         let predicate = args?["predicate"]?.stringValue
         let level = args?["level"]?.stringValue ?? "debug"
 
+        // Pro gate: app mode requires Pro
+        if mode == "app", !(await LicenseManager.shared.isPro) {
+            return .fail(
+                "Log capture mode 'app' requires SilbercueSwift Pro.\n"
+                + "Free modes: 'smart' (default, recommended) or 'verbose' (all logs).\n"
+                + "Upgrade: \(LicenseManager.upgradeURL)")
+        }
+
         let (logArgs, note) = await buildLogArgs(
             simulator: sim, mode: mode, level: level,
             process: process, subsystem: subsystem, predicate: predicate
@@ -598,6 +610,15 @@ enum LogTools {
 
         if allLines.isEmpty {
             return .ok("No log lines captured" + (isRunning ? " (capture is running)" : " (capture not running)"))
+        }
+
+        // Pro gate: custom topic filtering requires Pro
+        let requestedCustomTopics = includeTopics.subtracting(["app", "crashes"])
+        if !requestedCustomTopics.isEmpty, !(await LicenseManager.shared.isPro) {
+            return .fail(
+                "Topic filtering (\(requestedCustomTopics.sorted().joined(separator: ", "))) requires SilbercueSwift Pro.\n"
+                + "Free tier shows: app + crashes only.\n"
+                + "Upgrade: \(LicenseManager.upgradeURL)")
         }
 
         // Get session info for topic categorization
