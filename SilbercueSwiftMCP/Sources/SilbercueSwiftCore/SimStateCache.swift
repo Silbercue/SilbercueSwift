@@ -1,40 +1,40 @@
 import Foundation
 
 /// Per-simulator cached state entry. Fields are independently populated and timestamped.
-struct SimCacheEntry: Sendable {
+public struct SimCacheEntry: Sendable {
     // simctl-sourced (refreshed on sim_status)
-    var state: String?
-    var name: String?
-    var runtime: String?
-    var lastBootedAt: String?
-    var simctlTimestamp: ContinuousClock.Instant?
+    public var state: String?
+    public var name: String?
+    public var runtime: String?
+    public var lastBootedAt: String?
+    public var simctlTimestamp: ContinuousClock.Instant?
 
     // Tool-reported (updated by tool handlers via fire-and-forget Tasks)
-    var runningApp: String?
-    var runningAppTimestamp: ContinuousClock.Instant?
+    public var runningApp: String?
+    public var runningAppTimestamp: ContinuousClock.Instant?
 
-    var orientation: String?
-    var orientationTimestamp: ContinuousClock.Instant?
+    public var orientation: String?
+    public var orientationTimestamp: ContinuousClock.Instant?
 
-    var alertState: String?
-    var alertTimestamp: ContinuousClock.Instant?
+    public var alertState: String?
+    public var alertTimestamp: ContinuousClock.Instant?
 
-    var screenSummary: String?
-    var screenTimestamp: ContinuousClock.Instant?
+    public var screenSummary: String?
+    public var screenTimestamp: ContinuousClock.Instant?
 
-    var consoleErrorCount: Int?
-    var consoleTimestamp: ContinuousClock.Instant?
+    public var consoleErrorCount: Int?
+    public var consoleTimestamp: ContinuousClock.Instant?
 
-    var wdaStatus: String?
-    var wdaTimestamp: ContinuousClock.Instant?
+    public var wdaStatus: String?
+    public var wdaTimestamp: ContinuousClock.Instant?
 
-    var lastScreenshotAt: ContinuousClock.Instant?
+    public var lastScreenshotAt: ContinuousClock.Instant?
 }
 
 /// Cached simulator state — the "virtual table" that gives the LLM eyes.
 /// Updated reactively by tool handlers (fire-and-forget), read by sim_status/sim_inspect.
-actor SimStateCache {
-    static let shared = SimStateCache()
+public actor SimStateCache {
+    public static let shared = SimStateCache()
 
     private var entries: [String: SimCacheEntry] = [:]
 
@@ -43,7 +43,7 @@ actor SimStateCache {
 
     // MARK: - Bulk update from simctl JSON
 
-    func updateFromSimctl(_ devices: [String: [[String: Any]]]) {
+    public func updateFromSimctl(_ devices: [String: [[String: Any]]]) {
         let now = ContinuousClock.now
         for (runtime, deviceList) in devices {
             let runtimeName = runtime.split(separator: ".").last.map(String.init) ?? runtime
@@ -68,7 +68,7 @@ actor SimStateCache {
 
     // MARK: - Tool-reported updates (fire-and-forget from handlers)
 
-    func recordBoot(udid: String, name: String, runtime: String) {
+    public func recordBoot(udid: String, name: String, runtime: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.state = "Booted"
         if !name.isEmpty { entry.name = name }
@@ -77,7 +77,7 @@ actor SimStateCache {
         entries[udid] = entry
     }
 
-    func recordShutdown(udid: String) {
+    public func recordShutdown(udid: String) {
         guard var entry = entries[udid] else { return }
         entry.state = "Shutdown"
         entry.simctlTimestamp = ContinuousClock.now
@@ -85,55 +85,55 @@ actor SimStateCache {
         entries[udid] = entry
     }
 
-    func recordAppLaunch(udid: String, bundleId: String) {
+    public func recordAppLaunch(udid: String, bundleId: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.runningApp = bundleId
         entry.runningAppTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordAppTerminate(udid: String) {
+    public func recordAppTerminate(udid: String) {
         guard var entry = entries[udid] else { return }
         entry.runningApp = nil
         entry.runningAppTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordOrientation(udid: String, orientation: String) {
+    public func recordOrientation(udid: String, orientation: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.orientation = orientation
         entry.orientationTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordAlert(udid: String, state: String) {
+    public func recordAlert(udid: String, state: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.alertState = state
         entry.alertTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordScreenshot(udid: String) {
+    public func recordScreenshot(udid: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.lastScreenshotAt = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordScreenInfo(udid: String, elementCount: Int, summary: String) {
+    public func recordScreenInfo(udid: String, elementCount: Int, summary: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.screenSummary = "\(summary) — \(elementCount) elements"
         entry.screenTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordConsoleErrors(udid: String, errorCount: Int) {
+    public func recordConsoleErrors(udid: String, errorCount: Int) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.consoleErrorCount = errorCount
         entry.consoleTimestamp = ContinuousClock.now
         entries[udid] = entry
     }
 
-    func recordWDAStatus(udid: String, status: String) {
+    public func recordWDAStatus(udid: String, status: String) {
         var entry = entries[udid] ?? SimCacheEntry()
         entry.wdaStatus = status
         entry.wdaTimestamp = ContinuousClock.now
@@ -142,16 +142,16 @@ actor SimStateCache {
 
     // MARK: - Read methods
 
-    func entry(for udid: String) -> SimCacheEntry? {
+    public func entry(for udid: String) -> SimCacheEntry? {
         entries[udid]
     }
 
-    func allEntries() -> [String: SimCacheEntry] {
+    public func allEntries() -> [String: SimCacheEntry] {
         entries
     }
 
     /// Resolve a short UDID prefix (4+ chars) to full UDIDs.
-    func resolveShortUDID(_ prefix: String) -> [String] {
+    public func resolveShortUDID(_ prefix: String) -> [String] {
         let p = prefix.uppercased()
         return entries.keys.filter { $0.uppercased().hasPrefix(p) }
     }
@@ -159,7 +159,7 @@ actor SimStateCache {
     // MARK: - Formatting helpers
 
     /// Format age of a timestamp as human-readable string.
-    func age(_ timestamp: ContinuousClock.Instant?) -> String? {
+    public func age(_ timestamp: ContinuousClock.Instant?) -> String? {
         guard let ts = timestamp else { return nil }
         let elapsed = ContinuousClock.now - ts
         let seconds = Int(elapsed.components.seconds)
@@ -172,7 +172,7 @@ actor SimStateCache {
     }
 
     /// Format uptime from ISO 8601 lastBootedAt string.
-    func uptime(from lastBootedAt: String?) -> String? {
+    public func uptime(from lastBootedAt: String?) -> String? {
         guard let str = lastBootedAt else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -189,7 +189,7 @@ actor SimStateCache {
     // MARK: - Helper: current session UDID
 
     /// Resolve the current session simulator to a UDID for cache keying. Returns nil on failure.
-    static func currentUDID() async -> String? {
+    public static func currentUDID() async -> String? {
         guard let sim = try? await SessionState.shared.resolveSimulator(nil) else { return nil }
         return try? await SimTools.resolveSimulator(sim)
     }

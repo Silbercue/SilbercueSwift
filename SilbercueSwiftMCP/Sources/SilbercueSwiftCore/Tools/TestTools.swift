@@ -1,7 +1,7 @@
 import Foundation
 import MCP
 
-enum TestTools {
+public enum TestTools {
     static let tools: [Tool] = [
         Tool(
             name: "test_sim",
@@ -23,76 +23,30 @@ enum TestTools {
                 ]),
             ])
         ),
-        Tool(
-            name: "test_failures",
-            description: """
-                Get only failed tests with their error messages from an xcresult bundle. \
-                Either provide an xcresult_path from a previous test_sim run, \
-                or provide project/scheme to run tests first (auto-detected if omitted). \
-                Returns test name + failure message for each failed test.
-                """,
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "xcresult_path": .object(["type": .string("string"), "description": .string("Path to existing .xcresult bundle. If provided, skips running tests.")]),
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
-                    "include_console": .object(["type": .string("boolean"), "description": .string("Include console output (print/NSLog) for each failed test. Default: false. Use when assertion message alone is not enough to diagnose the failure.")]),
-                ]),
-            ])
-        ),
-        Tool(
-            name: "test_coverage",
-            description: """
-                Get code coverage report from an xcresult bundle. \
-                Without file param: per-file overview (which files need tests?). \
-                With file param: per-function detail (which functions are untested? how often called?). \
-                Either provide xcresult_path or project/scheme (will run tests with coverage enabled). \
-                Project, scheme, and simulator are auto-detected if omitted.
-                """,
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "file": .object(["type": .string("string"), "description": .string("Drill into a specific file: shows per-function coverage + execution counts. Filename or path (e.g. 'LoginViewModel.swift').")]),
-                    "xcresult_path": .object(["type": .string("string"), "description": .string("Path to existing .xcresult bundle (must have been built with coverage enabled)")]),
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
-                    "min_coverage": .object(["type": .string("number"), "description": .string("Only show files below this coverage %. Default: 100 (show all)")]),
-                ]),
-            ])
-        ),
-        Tool(
-            name: "build_and_diagnose",
-            description: """
-                Build an iOS app and extract structured errors/warnings from the xcresult bundle. \
-                Returns only actionable diagnostics (errors, warnings) with file paths and line numbers. \
-                Project, scheme, and simulator are auto-detected if omitted.
-                """,
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
-                    "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
-                    "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected if omitted.")]),
-                    "configuration": .object(["type": .string("string"), "description": .string("Build configuration (Debug/Release). Default: Debug")]),
-                ]),
-            ])
-        ),
     ]
+
+    // MARK: - Registration (Free tools only)
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "test_sim": testSim
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
 
     // MARK: - Shared helpers
 
     /// Generate a unique xcresult path
-    private static func xcresultPath(prefix: String) -> String {
+    public static func xcresultPath(prefix: String) -> String {
         let ts = Int(Date().timeIntervalSince1970)
         return "/tmp/ss-\(prefix)-\(ts).xcresult"
     }
 
     /// Build xcodebuild arguments common to build/test.
     /// Handles simulator names and UDIDs via AutoDetect.buildDestination.
-    private static func xcodebuildBaseArgs(
+    public static func xcodebuildBaseArgs(
         project: String, scheme: String, destination: String, configuration: String
     ) -> [String] {
         let isWorkspace = project.hasSuffix(".xcworkspace")
@@ -107,7 +61,7 @@ enum TestTools {
     }
 
     /// Run xcodebuild test and return the xcresult path
-    private static func runTests(
+    public static func runTests(
         project: String, scheme: String, destination: String,
         configuration: String, testplan: String?, filter: String?,
         coverage: Bool, resultPath: String
@@ -142,7 +96,7 @@ enum TestTools {
     }
 
     /// Run xcodebuild build and return the xcresult path
-    private static func runBuild(
+    public static func runBuild(
         project: String, scheme: String, destination: String,
         configuration: String, resultPath: String
     ) async throws -> (ShellResult, String) {
@@ -166,7 +120,7 @@ enum TestTools {
     }
 
     /// Parse xcresult test summary JSON
-    private static func parseTestSummary(_ path: String) async -> String? {
+    public static func parseTestSummary(_ path: String) async -> String? {
         do {
             let result = try await Shell.run(
                 "/usr/bin/xcrun",
@@ -185,7 +139,7 @@ enum TestTools {
     }
 
     /// Parse xcresult test details JSON
-    private static func parseTestDetails(_ path: String) async -> String? {
+    public static func parseTestDetails(_ path: String) async -> String? {
         do {
             let result = try await Shell.run(
                 "/usr/bin/xcrun",
@@ -204,7 +158,7 @@ enum TestTools {
     }
 
     /// Parse xcresult build results JSON
-    private static func parseBuildResults(_ path: String) async -> String? {
+    public static func parseBuildResults(_ path: String) async -> String? {
         do {
             let result = try await Shell.run(
                 "/usr/bin/xcrun",
@@ -224,7 +178,7 @@ enum TestTools {
 
     /// Export failure attachments (screenshots) from xcresult
     /// Returns array of (testId, filePath) tuples for exported images
-    private static func exportFailureAttachments(_ xcresultPath: String) async -> [(test: String, path: String)] {
+    public static func exportFailureAttachments(_ xcresultPath: String) async -> [(test: String, path: String)] {
         let outputDir = "/tmp/ss-attachments-\(Int(Date().timeIntervalSince1970))"
         do {
             _ = try await Shell.run("/bin/mkdir", arguments: ["-p", outputDir], timeout: 5)
@@ -280,7 +234,7 @@ enum TestTools {
 
     /// Extract console output per failed test from xcresult action log
     /// Returns dict: testName → emittedOutput
-    private static func extractFailedTestConsole(_ xcresultPath: String) async -> [String: String] {
+    public static func extractFailedTestConsole(_ xcresultPath: String) async -> [String: String] {
         let shellResult: ShellResult
         do {
             shellResult = try await Shell.run(
@@ -329,7 +283,7 @@ enum TestTools {
     }
 
     /// Parse coverage report via xccov
-    private static func parseCoverage(_ path: String) async -> String? {
+    public static func parseCoverage(_ path: String) async -> String? {
         do {
             let result = try await Shell.run(
                 "/usr/bin/xcrun",
@@ -414,224 +368,9 @@ enum TestTools {
         }
     }
 
-    static func testFailures(_ args: [String: Value]?) async -> CallTool.Result {
-        let xcresultPath: String
-
-        if let provided = args?["xcresult_path"]?.stringValue {
-            xcresultPath = provided
-        } else {
-            do {
-                let project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
-                let scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
-                let simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
-                let destination = await AutoDetect.buildDestination(simulator)
-                let path = Self.xcresultPath(prefix: "fail")
-                let (_, p) = try await runTests(
-                    project: project, scheme: scheme, destination: destination,
-                    configuration: "Debug", testplan: nil, filter: nil,
-                    coverage: false, resultPath: path
-                )
-                xcresultPath = p
-            } catch {
-                return .fail("\(error)")
-            }
-        }
-
-        let includeConsole = args?["include_console"]?.boolValue ?? false
-
-        // Parse test details and extract failures
-        guard let detailsJSON = await parseTestDetails(xcresultPath),
-              let data = detailsJSON.data(using: .utf8) else {
-            return .fail("Failed to parse xcresult at \(xcresultPath)")
-        }
-
-        // Export failure screenshots if available
-        let attachments = await exportFailureAttachments(xcresultPath)
-
-        // Extract console output per failed test if requested
-        let consoleByTest = includeConsole ? await extractFailedTestConsole(xcresultPath) : [:]
-
-        return formatTestFailures(data, xcresultPath: xcresultPath, attachments: attachments, consoleByTest: consoleByTest)
-    }
-
-    static func testCoverage(_ args: [String: Value]?) async -> CallTool.Result {
-        let xcresultPath: String
-
-        if let provided = args?["xcresult_path"]?.stringValue {
-            xcresultPath = provided
-        } else {
-            do {
-                let project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
-                let scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
-                let simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
-                let destination = await AutoDetect.buildDestination(simulator)
-                let path = Self.xcresultPath(prefix: "cov")
-                let (_, p) = try await runTests(
-                    project: project, scheme: scheme, destination: destination,
-                    configuration: "Debug", testplan: nil, filter: nil,
-                    coverage: true, resultPath: path
-                )
-                xcresultPath = p
-            } catch {
-                return .fail("\(error)")
-            }
-        }
-
-        // File drill-down: per-function coverage for a specific file
-        if let file = args?["file"]?.stringValue {
-            return await fileCoverage(file: file, xcresultPath: xcresultPath)
-        }
-
-        let minCoverage = args?["min_coverage"]?.numberValue ?? 100.0
-
-        guard let coverageJSON = await parseCoverage(xcresultPath),
-              let data = coverageJSON.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return .fail("Failed to parse coverage from \(xcresultPath). Was coverage enabled during the test run?")
-        }
-
-        return formatCoverageReport(json, minCoverage: minCoverage, xcresultPath: xcresultPath)
-    }
-
-    /// Per-function coverage for a specific file via `xccov --functions-for-file`.
-    private static func fileCoverage(file: String, xcresultPath: String) async -> CallTool.Result {
-        // xccov accepts partial filenames — it fuzzy-matches against the coverage archive
-        let result: ShellResult
-        do {
-            result = try await Shell.run(
-                "/usr/bin/xcrun",
-                arguments: ["xccov", "view", "--report", "--functions-for-file", file, "--json", xcresultPath],
-                timeout: 30
-            )
-        } catch {
-            return .fail("xccov error: \(error)")
-        }
-        guard result.succeeded, !result.stdout.isEmpty else {
-            return .fail("No coverage data for '\(file)'. File not in coverage report or coverage not enabled.\n\(result.stderr)")
-        }
-
-        // Parse JSON — can be an array of file objects or a single object
-        guard let data = result.stdout.data(using: .utf8),
-              let raw = try? JSONSerialization.jsonObject(with: data) else {
-            return .fail("Failed to parse xccov JSON for '\(file)'")
-        }
-
-        // Normalize: xccov returns either [FileObj] or {targets: [{files: [FileObj]}]}
-        var fileObjects: [[String: Any]] = []
-        if let array = raw as? [[String: Any]] {
-            fileObjects = array
-        } else if let dict = raw as? [String: Any],
-                  let targets = dict["targets"] as? [[String: Any]] {
-            for target in targets {
-                if let files = target["files"] as? [[String: Any]] {
-                    fileObjects += files
-                }
-            }
-        }
-
-        // Find matching file (fuzzy: filename contains the search term)
-        let searchName = (file as NSString).lastPathComponent.lowercased()
-        let matched = fileObjects.filter {
-            let name = (($0["name"] as? String) ?? ($0["path"] as? String) ?? "").lowercased()
-            return name.contains(searchName) || searchName.contains(name)
-        }
-
-        guard let fileObj = matched.first else {
-            let available = fileObjects.compactMap { $0["name"] as? String }.prefix(10)
-            return .fail("'\(file)' not found in coverage. Available: \(available.joined(separator: ", "))")
-        }
-
-        // Format output
-        let fileName = (fileObj["name"] as? String) ?? file
-        let fileCov = (fileObj["lineCoverage"] as? Double) ?? 0
-        let covered = (fileObj["coveredLines"] as? Int) ?? 0
-        let executable = (fileObj["executableLines"] as? Int) ?? 0
-
-        var lines: [String] = []
-        lines.append(String(format: "%@ — %.1f%% (%d/%d lines)", fileName, fileCov * 100, covered, executable))
-
-        if let functions = fileObj["functions"] as? [[String: Any]] {
-            // Sort by line number
-            let sorted = functions.sorted {
-                ($0["lineNumber"] as? Int ?? 0) < ($1["lineNumber"] as? Int ?? 0)
-            }
-
-            var untested: [String] = []
-            lines.append("")
-            for fn in sorted {
-                let name = (fn["name"] as? String) ?? "?"
-                let lineNum = (fn["lineNumber"] as? Int) ?? 0
-                let cov = (fn["lineCoverage"] as? Double) ?? 0
-                let execCount = (fn["executionCount"] as? Int) ?? 0
-                let fnLines = (fn["executableLines"] as? Int) ?? 0
-
-                if execCount == 0 {
-                    lines.append(String(format: "  L%-4d %-40s   0%%  UNTESTED  (%d lines)", lineNum, name, fnLines))
-                    untested.append("\(name) (L\(lineNum), \(fnLines) lines)")
-                } else {
-                    lines.append(String(format: "  L%-4d %-40s %3.0f%%  (%dx called)", lineNum, name, cov * 100, execCount))
-                }
-            }
-
-            if !untested.isEmpty {
-                lines.append("")
-                lines.append("Untested functions (\(untested.count)): \(untested.joined(separator: ", "))")
-            }
-        }
-
-        lines.append("\nxcresult: \(xcresultPath)")
-        return .ok(lines.joined(separator: "\n"))
-    }
-
-    static func buildAndDiagnose(_ args: [String: Value]?) async -> CallTool.Result {
-        let project: String
-        let scheme: String
-        let simulator: String
-        do {
-            project = try await SessionState.shared.resolveProject(args?["project"]?.stringValue)
-            scheme = try await SessionState.shared.resolveScheme(args?["scheme"]?.stringValue, project: project)
-            simulator = try await SessionState.shared.resolveSimulator(args?["simulator"]?.stringValue)
-        } catch {
-            return .fail("\(error)")
-        }
-
-        let configuration = args?["configuration"]?.stringValue ?? "Debug"
-        let resultPath = xcresultPath(prefix: "build")
-        let destination = await AutoDetect.buildDestination(simulator)
-
-        let start = CFAbsoluteTimeGetCurrent()
-        do {
-            let (buildResult, path) = try await runBuild(
-                project: project, scheme: scheme, destination: destination,
-                configuration: configuration, resultPath: resultPath
-            )
-            let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
-
-            // Parse build results from xcresult
-            if let buildJSON = await parseBuildResults(path),
-               let data = buildJSON.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                return formatBuildDiagnosis(json, succeeded: buildResult.succeeded, elapsed: elapsed, xcresultPath: path)
-            }
-
-            // Fallback
-            if buildResult.succeeded {
-                return .ok("Build succeeded in \(elapsed)s (no diagnostics)\nxcresult: \(path)")
-            } else {
-                let errorLines = buildResult.stderr.split(separator: "\n")
-                    .filter { $0.contains(": error:") }
-                    .prefix(20)
-                    .joined(separator: "\n")
-                return .fail("Build FAILED in \(elapsed)s\n\(errorLines)\nxcresult: \(path)")
-            }
-        } catch {
-            return .fail("Build error: \(error)")
-        }
-    }
-
     // MARK: - Formatting helpers
 
-    private static func formatTestSummary(_ json: [String: Any], elapsed: String, xcresultPath: String) -> String {
+    public static func formatTestSummary(_ json: [String: Any], elapsed: String, xcresultPath: String) -> String {
         var lines: [String] = []
 
         // Overall result
@@ -680,7 +419,7 @@ enum TestTools {
         return lines.joined(separator: "\n")
     }
 
-    private static func formatTestFailures(
+    public static func formatTestFailures(
         _ data: Data, xcresultPath: String,
         attachments: [(test: String, path: String)] = [],
         consoleByTest: [String: String] = [:]
@@ -766,7 +505,7 @@ enum TestTools {
         return .fail(truncated)
     }
 
-    private static func formatCoverageReport(_ json: [String: Any], minCoverage: Double, xcresultPath: String) -> CallTool.Result {
+    public static func formatCoverageReport(_ json: [String: Any], minCoverage: Double, xcresultPath: String) -> CallTool.Result {
         var lines: [String] = []
 
         // Overall coverage
@@ -809,7 +548,7 @@ enum TestTools {
         return .ok(truncated)
     }
 
-    private static func formatBuildDiagnosis(
+    public static func formatBuildDiagnosis(
         _ json: [String: Any], succeeded: Bool, elapsed: String, xcresultPath: String
     ) -> CallTool.Result {
         var lines: [String] = []

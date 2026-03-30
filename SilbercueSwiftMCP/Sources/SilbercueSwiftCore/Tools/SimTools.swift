@@ -162,6 +162,28 @@ enum SimTools {
         ),
     ]
 
+    // MARK: - Registration
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "list_sims": listSims
+        case "boot_sim": bootSim
+        case "shutdown_sim": shutdownSim
+        case "install_app": installApp
+        case "launch_app": launchApp
+        case "terminate_app": terminateApp
+        case "clone_sim": cloneSim
+        case "erase_sim": eraseSim
+        case "delete_sim": deleteSim
+        case "set_orientation": setOrientation
+        case "sim_status": simStatus
+        case "sim_inspect": simInspect
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
+
     // MARK: - Resolve simulator name to UDID
 
     private static let uuidPattern = try! NSRegularExpression(

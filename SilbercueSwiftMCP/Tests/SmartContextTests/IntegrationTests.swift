@@ -86,6 +86,8 @@ struct FullResolutionTests {
 
     @Test("Tool dispatch works without explicit params when env is configured")
     func toolDispatchNoParams() async {
+        // Ensure tools are registered (dynamic registry needs explicit init)
+        ToolRegistry.registerFreeTools()
         // Clean slate
         await SessionState.shared.clearDefaults()
 

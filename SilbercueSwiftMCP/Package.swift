@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "SilbercueSwift",
     platforms: [.macOS(.v13)],
+    products: [
+        .library(name: "SilbercueSwiftCore", targets: ["SilbercueSwiftCore"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.11.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.0.0"),
@@ -14,9 +17,6 @@ let package = Package(
             dependencies: [
                 .product(name: "MCP", package: "swift-sdk"),
                 .product(name: "Logging", package: "swift-log"),
-            ],
-            linkerSettings: [
-                .linkedFramework("ScreenCaptureKit"),
             ]
         ),
         .executableTarget(

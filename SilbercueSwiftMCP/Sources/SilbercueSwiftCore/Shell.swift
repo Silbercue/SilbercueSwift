@@ -1,16 +1,16 @@
 import Foundation
 
-struct ShellResult: Sendable {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int32
+public struct ShellResult: Sendable {
+    public let stdout: String
+    public let stderr: String
+    public let exitCode: Int32
 
-    var succeeded: Bool { exitCode == 0 }
+    public var succeeded: Bool { exitCode == 0 }
 }
 
-enum Shell {
+public enum Shell {
     /// Run a command with arguments, returning stdout/stderr/exitCode.
-    static func run(
+    public static func run(
         _ executable: String,
         arguments: [String],
         workingDirectory: String? = nil,
@@ -95,12 +95,12 @@ enum Shell {
     }
 
     /// Convenience for xcrun commands. Accepts an optional timeout (default: 300s).
-    static func xcrun(timeout: TimeInterval = 300, _ arguments: String...) async throws -> ShellResult {
+    public static func xcrun(timeout: TimeInterval = 300, _ arguments: String...) async throws -> ShellResult {
         try await run("/usr/bin/xcrun", arguments: Array(arguments), timeout: timeout)
     }
 
     /// Convenience for git commands (default timeout: 30s)
-    static func git(_ arguments: [String], workingDirectory: String, timeout: TimeInterval = 30) async throws -> ShellResult {
+    public static func git(_ arguments: [String], workingDirectory: String, timeout: TimeInterval = 30) async throws -> ShellResult {
         try await run("/usr/bin/git", arguments: arguments, workingDirectory: workingDirectory, timeout: timeout)
     }
 }

@@ -159,6 +159,19 @@ enum ConsoleTools {
         ),
     ]
 
+    // MARK: - Registration
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "launch_app_console": launchAppConsole
+        case "read_app_console": readAppConsole
+        case "stop_app_console": stopAppConsole
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
+
     static func launchAppConsole(_ args: [String: Value]?) async -> CallTool.Result {
         guard let bundleId = await SessionState.shared.resolveBundleId(args?["bundle_id"]?.stringValue) else {
             return .fail("Missing bundle_id — provide it or run build_sim first")
