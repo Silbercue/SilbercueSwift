@@ -16,14 +16,21 @@ SilbercueSwiftMCP/.mcpregistry_registry_token
 .playwright-mcp/
 .claude/
 
-# Internal planning docs (not for public repo)
+# Internal — not for public repo
+_bmad-output/
+_bmad/
+scripts/
+SwiftMCPTestHarness/
+SilbercueTestHarness/
+SilbercueWDA/
+visual-baselines/
+autoresearch-results.tsv
+CLAUDE.md
+HANDOVER.md
+SS-*.md
+PRD-*.md
 FEATURE-EVAL.md
-SS-USP.md
-SS-KILLER-FEATURES.md
-SS-MCP-RECHERCHE.md
-PRD-SMART-CONTEXT.md
 BUGREPORT-*.md
 DIRECTORY-SUBMISSIONS.md
 iOS-ALERTS-RESEARCH-*.md
-HANDOVER.md
 prompt.md
