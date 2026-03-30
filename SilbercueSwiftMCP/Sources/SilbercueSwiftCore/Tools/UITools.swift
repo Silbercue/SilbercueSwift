@@ -236,6 +236,13 @@ enum UITools {
             }
 
         case "accept_all":
+            // Pro gate: batch alert handling
+            if !(await LicenseManager.shared.isPro) {
+                return .fail(
+                    "Batch alert handling (accept_all/dismiss_all) requires SilbercueSwift Pro.\n"
+                    + "Free alternative: use action='accept' or action='dismiss' for individual alerts.\n"
+                    + "Upgrade: \(LicenseManager.upgradeURL)")
+            }
             do {
                 let result = try await WDAClient.shared.handleAllAlerts(accept: true)
                 if result.count == 0 {
@@ -251,6 +258,13 @@ enum UITools {
             }
 
         case "dismiss_all":
+            // Pro gate: batch alert handling
+            if !(await LicenseManager.shared.isPro) {
+                return .fail(
+                    "Batch alert handling (accept_all/dismiss_all) requires SilbercueSwift Pro.\n"
+                    + "Free alternative: use action='accept' or action='dismiss' for individual alerts.\n"
+                    + "Upgrade: \(LicenseManager.upgradeURL)")
+            }
             do {
                 let result = try await WDAClient.shared.handleAllAlerts(accept: false)
                 if result.count == 0 {
@@ -345,6 +359,15 @@ enum UITools {
         let scroll = args?["scroll"]?.boolValue ?? false
         let direction = args?["direction"]?.stringValue ?? "auto"
         let maxSwipes = args?["max_swipes"]?.intValue ?? 10
+
+        // Pro gate: scroll:true requires Pro
+        if scroll, !(await LicenseManager.shared.isPro) {
+            return .fail(
+                "scroll:true requires SilbercueSwift Pro.\n"
+                + "Free alternative: use swipe to manually scroll, then find_element without scroll.\n"
+                + "Upgrade: \(LicenseManager.upgradeURL)")
+        }
+
         do {
             let start = CFAbsoluteTimeGetCurrent()
             let (elementId, swipes) = try await WDAClient.shared.findElement(

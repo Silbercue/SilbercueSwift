@@ -1,8 +1,26 @@
 import MCP
 
 /// Central registry of all tools. Each module adds its tools here.
+/// Pro tools are hidden from free-tier users (LLM never sees them).
 public enum ToolRegistry {
-    public static var allTools: [Tool] {
+
+    /// Tools that require a Pro license. Hidden from allTools for free users.
+    private static let proOnlyTools: Set<String> = [
+        // Testing deep analysis (test_sim stays free)
+        "test_failures", "test_coverage", "build_and_diagnose",
+        // Visual regression
+        "save_visual_baseline", "compare_visual",
+        // Multi-device
+        "multi_device_check",
+        // Quality checks
+        "accessibility_check", "localization_check",
+        // Advanced gestures
+        "drag_and_drop", "double_tap", "long_press", "swipe", "pinch",
+    ]
+
+    /// Returns all available tools, filtered by license tier.
+    /// Pro tools are completely hidden for free users — the LLM never sees them.
+    public static func allTools() async -> [Tool] {
         var tools: [Tool] = []
         tools += SessionState.tools
         tools += BuildTools.tools
@@ -17,10 +35,19 @@ public enum ToolRegistry {
         tools += MultiDeviceTools.tools
         tools += AccessibilityTools.tools
         tools += LocalizationTools.tools
-        return tools
+
+        if await LicenseManager.shared.isPro {
+            return tools
+        }
+        return tools.filter { !proOnlyTools.contains($0.name) }
     }
 
     public static func dispatch(_ name: String, _ args: [String: Value]?) async -> CallTool.Result {
+        // Pro gate: block hidden tools for free users
+        if proOnlyTools.contains(name), !(await LicenseManager.shared.isPro) {
+            return .fail(upgradeMessage(tool: name))
+        }
+
         switch name {
         // Session
         case "set_defaults":      return await SessionState.handleSetDefaults(args)
@@ -106,5 +133,17 @@ public enum ToolRegistry {
         default:
             return .fail("Unknown tool: \(name)")
         }
+    }
+
+    private static func upgradeMessage(tool: String) -> String {
+        """
+        '\(tool)' requires SilbercueSwift Pro.
+
+        Upgrade at \(LicenseManager.upgradeURL)
+        Then activate: silbercueswift activate <YOUR_KEY>
+
+        Pro includes: 15ms screenshots, test failure analysis, code coverage, visual regression, \
+        multi-device checks, accessibility/localization testing, drag & drop, and advanced gestures.
+        """
     }
 }
