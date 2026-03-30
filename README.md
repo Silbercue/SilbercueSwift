@@ -34,7 +34,7 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Scroll to element | — | Manual swipe loop | **3-tier auto-scroll (1 call)** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
 | Alert handling | — | Single alert | **3-tier search + batch accept_all** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
 | iOS 18 ContactsUI dialog | — | — | **Supported** |
-| Screenshot latency | ~0.5s | ~500ms+ | **~15ms (30x)** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
+| Screenshot latency | ~0.5s | ~500ms+ | **Free: ~310ms (faster)** / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) **~15ms (30x)** |
 | View hierarchy | 15.5s | ~15s | **~20ms (750x)** |
 | Console log per failed test | — | — | **Optional** |
 | Log filtering | Subsystem only (bundleId required) | — | **Topic-filtered: agent reads only what matters, 90% fewer tokens** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
@@ -47,9 +47,9 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 
 ### Where SilbercueSwift really shines
 
-> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Screenshots in 15ms instead of 500ms** — 30x faster visual feedback ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)
+> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Screenshots faster than any alternative** — Free: ~310ms / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) ~15ms
 
-SilbercueSwift reads the simulator framebuffer directly via CoreSimulator's IOSurface API. No simctl subprocess, no PNG round-trip. The agent gets a screenshot in ~15ms. With the competition, it takes ~500ms. Agents can take screenshots freely without penalty. Free tier uses simctl (~310ms) — still faster than most alternatives.
+Even on the free tier, SilbercueSwift screenshots are faster than the competition (~500ms). Pro unlocks the IOSurface framebuffer path — direct GPU memory read, no subprocess, no PNG round-trip — bringing latency down to ~15ms. Agents can take screenshots freely without penalty at either tier.
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Structured test results from xcresult bundles** — zero guesswork on failures
 
@@ -59,19 +59,19 @@ When a test fails, the agent gets the error message, the exact file:line, a scre
 
 `brew install silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
 
-> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Agent reads only what matters — 90% fewer tokens, zero wasted calls**
+> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Agent reads only what matters — 90% fewer tokens, zero wasted calls** (topic filtering ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square))
 
-`read_logs` returns only app logs + crashes by default, plus a topic menu with line counts: `network(87) lifecycle(12) springboard(8)`. The agent opens specific topics in one call — no guessing, no iteration. Four filter layers (noise exclusion, capture modes, topic filtering, deduplication) that no competitor has.
+Free tier already strips noise: 15 known noise processes are excluded at capture time, and duplicate lines are collapsed (79% I/O reduction). Pro adds topic filtering — `read_logs` categorizes lines into 8 topics and shows only app + crashes by default, with a menu: `network(87) lifecycle(12) springboard(8)`. The agent opens specific topics in one call — no guessing, no iteration.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **One call to dismiss all permission dialogs** — 3 alerts in 1 roundtrip
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **One call to dismiss all permission dialogs** — 3 alerts in 1 roundtrip ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)
 
-Every app shows 2–3 permission dialogs on first launch. Other servers require the agent to screenshot → find button → click, per dialog. `handle_alert(action: "accept_all")` clears them all in a single call, searching across SpringBoard, ContactsUI, and the active app.
+Every app shows 2–3 permission dialogs on first launch. Other servers require the agent to screenshot → find button → click, per dialog. `handle_alert(action: "accept_all")` clears them all in a single call, searching across SpringBoard, ContactsUI, and the active app. Free tier handles alerts individually with `accept` / `dismiss`.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Drag & drop with element IDs** — 1 call instead of 3
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Drag & drop with element IDs** — 1 call instead of 3 ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)
 
 "Drag item A above item B" is a single call: `drag_and_drop(source_element: "el-0", target_element: "el-1")`. The competition only supports raw coordinates, forcing the agent to find both elements, extract their frames, and build a W3C Actions sequence — 3 calls minimum.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Auto-scroll to off-screen elements** — no more manual swipe loops
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Auto-scroll to off-screen elements** — no more manual swipe loops ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)
 
 `find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. Three fallback strategies ensure it works with UIKit, SwiftUI, and lazy-loaded lists. No guessing scroll direction.
 
