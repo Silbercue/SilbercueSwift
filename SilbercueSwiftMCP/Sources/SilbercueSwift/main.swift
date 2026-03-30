@@ -3,6 +3,10 @@ import MCP
 import Logging
 import SilbercueSwiftCore
 
+#if canImport(SilbercueSwiftPro)
+import SilbercueSwiftPro
+#endif
+
 let logger = Logger(label: "com.silbercue.mcp")
 
 // Handle CLI subcommands before starting MCP server
@@ -31,12 +35,18 @@ if cliArgs.count >= 2 {
     case "status":
         await LicenseManager.shared.loadOnStartup()
         let tier = await LicenseManager.shared.tierName
-        let toolCount = await ToolRegistry.allTools().count
+        ToolRegistry.registerFreeTools()
+        #if canImport(SilbercueSwiftPro)
+        if await LicenseManager.shared.isPro {
+            SilbercueSwiftPro.register()
+        }
+        #endif
+        let toolCount = ToolRegistry.allTools().count
         fputs("SilbercueSwift \(tier) — \(toolCount) tools available\n", stderr)
         Foundation.exit(0)
 
     case "version":
-        fputs("SilbercueSwift 2.0.0\n", stderr)
+        fputs("SilbercueSwift 3.0.0\n", stderr)
         Foundation.exit(0)
 
     default:
@@ -47,15 +57,24 @@ if cliArgs.count >= 2 {
 // Load license on startup
 await LicenseManager.shared.loadOnStartup()
 
+// Register all Free-tier tools
+ToolRegistry.registerFreeTools()
+
+#if canImport(SilbercueSwiftPro)
+if await LicenseManager.shared.isPro {
+    SilbercueSwiftPro.register()
+}
+#endif
+
 let server = Server(
     name: "SilbercueSwift",
-    version: "2.0.0",
+    version: "3.0.0",
     capabilities: .init(tools: .init(listChanged: true))
 )
 
 // List tools (filtered by license tier)
 await server.withMethodHandler(ListTools.self) { _ in
-    .init(tools: await ToolRegistry.allTools())
+    .init(tools: ToolRegistry.allTools())
 }
 
 // Dispatch tool calls (with Pro gate)

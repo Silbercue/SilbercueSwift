@@ -1,149 +1,49 @@
 import MCP
 
-/// Central registry of all tools. Each module adds its tools here.
-/// Pro tools are hidden from free-tier users (LLM never sees them).
+/// A registered tool: MCP schema + async handler.
+public struct ToolRegistration: Sendable {
+    public let tool: Tool
+    public let handler: @Sendable ([String: Value]?) async -> CallTool.Result
+
+    public init(tool: Tool, handler: @escaping @Sendable ([String: Value]?) async -> CallTool.Result) {
+        self.tool = tool
+        self.handler = handler
+    }
+}
+
+/// Central registry of all tools. Supports dynamic registration for Pro module.
 public enum ToolRegistry {
+    /// Registered tools — populated at startup by registerFreeTools() and optionally by Pro module.
+    nonisolated(unsafe) private static var registrations: [String: ToolRegistration] = [:]
 
-    /// Tools that require a Pro license. Hidden from allTools for free users.
-    private static let proOnlyTools: Set<String> = [
-        // Testing deep analysis (test_sim stays free)
-        "test_failures", "test_coverage", "build_and_diagnose",
-        // Visual regression
-        "save_visual_baseline", "compare_visual",
-        // Multi-device
-        "multi_device_check",
-        // Quality checks
-        "accessibility_check", "localization_check",
-        // Advanced gestures
-        "drag_and_drop", "double_tap", "long_press", "swipe", "pinch",
-    ]
-
-    /// Returns all available tools, filtered by license tier.
-    /// Pro tools are completely hidden for free users — the LLM never sees them.
-    public static func allTools() async -> [Tool] {
-        var tools: [Tool] = []
-        tools += SessionState.tools
-        tools += BuildTools.tools
-        tools += SimTools.tools
-        tools += ScreenshotTools.tools
-        tools += UITools.tools
-        tools += LogTools.tools
-        tools += GitTools.tools
-        tools += ConsoleTools.tools
-        tools += TestTools.tools
-        tools += VisualTools.tools
-        tools += MultiDeviceTools.tools
-        tools += AccessibilityTools.tools
-        tools += LocalizationTools.tools
-
-        if await LicenseManager.shared.isPro {
-            return tools
-        }
-        return tools.filter { !proOnlyTools.contains($0.name) }
+    /// Register tools (additive — safe to call multiple times).
+    public static func register(_ regs: [ToolRegistration]) {
+        for r in regs { registrations[r.tool.name] = r }
     }
 
+    /// Returns all registered tools.
+    public static func allTools() -> [Tool] {
+        registrations.values.map(\.tool)
+    }
+
+    /// Dispatch a tool call by name.
     public static func dispatch(_ name: String, _ args: [String: Value]?) async -> CallTool.Result {
-        // Pro gate: block hidden tools for free users
-        if proOnlyTools.contains(name), !(await LicenseManager.shared.isPro) {
-            return .fail(upgradeMessage(tool: name))
-        }
-
-        switch name {
-        // Session
-        case "set_defaults":      return await SessionState.handleSetDefaults(args)
-
-        // Build
-        case "build_sim":         return await BuildTools.buildSim(args)
-        case "build_run_sim":     return await BuildTools.buildRunSim(args)
-        case "clean":             return await BuildTools.clean(args)
-        case "discover_projects": return await BuildTools.discoverProjects(args)
-        case "list_schemes":      return await BuildTools.listSchemes(args)
-
-        // Simulator
-        case "list_sims":         return await SimTools.listSims(args)
-        case "boot_sim":          return await SimTools.bootSim(args)
-        case "shutdown_sim":      return await SimTools.shutdownSim(args)
-        case "install_app":       return await SimTools.installApp(args)
-        case "launch_app":        return await SimTools.launchApp(args)
-        case "terminate_app":     return await SimTools.terminateApp(args)
-        case "clone_sim":         return await SimTools.cloneSim(args)
-        case "erase_sim":         return await SimTools.eraseSim(args)
-        case "delete_sim":        return await SimTools.deleteSim(args)
-        case "set_orientation":   return await SimTools.setOrientation(args)
-        case "sim_status":        return await SimTools.simStatus(args)
-        case "sim_inspect":       return await SimTools.simInspect(args)
-
-        // Screenshots
-        case "screenshot":        return await ScreenshotTools.screenshot(args)
-
-        // UI Automation (WDA)
-        case "handle_alert":      return await UITools.handleAlert(args)
-        case "wda_status":        return await UITools.wdaStatus(args)
-        case "wda_create_session": return await UITools.wdaCreateSession(args)
-        case "find_element":      return await UITools.findElement(args)
-        case "find_elements":     return await UITools.findElements(args)
-        case "click_element":     return await UITools.clickElement(args)
-        case "tap_coordinates":   return await UITools.tapCoordinates(args)
-        case "double_tap":        return await UITools.doubleTap(args)
-        case "long_press":        return await UITools.longPress(args)
-        case "swipe":             return await UITools.swipeAction(args)
-        case "pinch":             return await UITools.pinchAction(args)
-        case "drag_and_drop":     return await UITools.dragAndDrop(args)
-        case "type_text":         return await UITools.typeText(args)
-        case "get_text":          return await UITools.getText(args)
-        case "get_source":        return await UITools.getSource(args)
-
-        // Logs
-        case "start_log_capture": return await LogTools.startLogCapture(args)
-        case "stop_log_capture":  return await LogTools.stopLogCapture(args)
-        case "read_logs":         return await LogTools.readLogs(args)
-        case "wait_for_log":      return await LogTools.waitForLog(args)
-
-        // Git
-        case "git_status":        return await GitTools.gitStatus(args)
-        case "git_diff":          return await GitTools.gitDiff(args)
-        case "git_log":           return await GitTools.gitLog(args)
-        case "git_commit":        return await GitTools.gitCommit(args)
-        case "git_branch":        return await GitTools.gitBranch(args)
-
-        // App Console (print/NSLog capture)
-        case "launch_app_console": return await ConsoleTools.launchAppConsole(args)
-        case "read_app_console":   return await ConsoleTools.readAppConsole(args)
-        case "stop_app_console":   return await ConsoleTools.stopAppConsole(args)
-
-        // Testing & Diagnostics (xcresult)
-        case "test_sim":           return await TestTools.testSim(args)
-        case "test_failures":      return await TestTools.testFailures(args)
-        case "test_coverage":      return await TestTools.testCoverage(args)
-        case "build_and_diagnose": return await TestTools.buildAndDiagnose(args)
-
-        // Visual Regression
-        case "save_visual_baseline": return await VisualTools.saveVisualBaseline(args)
-        case "compare_visual":       return await VisualTools.compareVisual(args)
-
-        // Multi-Device
-        case "multi_device_check":   return await MultiDeviceTools.multiDeviceCheck(args)
-
-        // Accessibility
-        case "accessibility_check":  return await AccessibilityTools.accessibilityCheck(args)
-
-        // Localization
-        case "localization_check":   return await LocalizationTools.localizationCheck(args)
-
-        default:
+        guard let reg = registrations[name] else {
             return .fail("Unknown tool: \(name)")
         }
+        return await reg.handler(args)
     }
 
-    private static func upgradeMessage(tool: String) -> String {
-        """
-        '\(tool)' requires SilbercueSwift Pro.
-
-        Upgrade at \(LicenseManager.upgradeURL)
-        Then activate: silbercueswift activate <YOUR_KEY>
-
-        Pro includes: 15ms screenshots, test failure analysis, code coverage, visual regression, \
-        multi-device checks, accessibility/localization testing, drag & drop, and advanced gestures.
-        """
+    /// Register all Free-tier tools. Called once from main.swift at startup.
+    public static func registerFreeTools() {
+        register(SessionState.registrations)
+        register(BuildTools.registrations)
+        register(SimTools.registrations)
+        register(ScreenshotTools.registrations)
+        register(UITools.registrations)
+        register(LogTools.registrations)
+        register(GitTools.registrations)
+        register(ConsoleTools.registrations)
+        register(TestTools.registrations)
     }
 }

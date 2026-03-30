@@ -1,20 +1,20 @@
 import Foundation
 
 /// Error with a rich message for LLM consumption (e.g. lists available options).
-struct SmartContextError: Error, CustomStringConvertible {
-    let description: String
-    init(_ message: String) { self.description = message }
+public struct SmartContextError: Error, CustomStringConvertible {
+    public let description: String
+    public init(_ message: String) { self.description = message }
 }
 
 /// Zero-config auto-detection for project, scheme, and simulator.
 /// Throws SmartContextError with rich messages when ambiguous.
-enum AutoDetect {
+public enum AutoDetect {
 
     // MARK: - Simulator (booted)
 
     /// Detect the booted simulator. Returns UDID if exactly one is booted.
     /// Throws with descriptive list when ambiguous.
-    static func simulator() async throws -> String {
+    public static func simulator() async throws -> String {
         let shellResult: ShellResult
         do {
             shellResult = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "booted", "-j")
@@ -57,7 +57,7 @@ enum AutoDetect {
     // MARK: - Project (CWD)
 
     /// Detect Xcode project in working directory. Prefers .xcworkspace over .xcodeproj.
-    static func project() async throws -> String {
+    public static func project() async throws -> String {
         let cwd = FileManager.default.currentDirectoryPath
 
         let result = try await Shell.run("/usr/bin/find", arguments: [
@@ -97,7 +97,7 @@ enum AutoDetect {
     // MARK: - Scheme (xcodebuild -list)
 
     /// Detect scheme for a project. Returns name if exactly one scheme exists.
-    static func scheme(project: String) async throws -> String {
+    public static func scheme(project: String) async throws -> String {
         let isWorkspace = project.hasSuffix(".xcworkspace")
         let projectFlag = isWorkspace ? "-workspace" : "-project"
 
@@ -130,7 +130,7 @@ enum AutoDetect {
     // MARK: - Destination builder
 
     /// Build xcodebuild destination string from a simulator name or UDID.
-    static func buildDestination(_ simulator: String) async -> String {
+    public static func buildDestination(_ simulator: String) async -> String {
         if isUDID(simulator) {
             return "platform=iOS Simulator,id=\(simulator)"
         }
@@ -148,7 +148,7 @@ enum AutoDetect {
     }
 
     /// Check if string is a UDID (UUID format)
-    static func isUDID(_ s: String) -> Bool {
+    public static func isUDID(_ s: String) -> Bool {
         let pattern = #"^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$"#
         return s.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
     }

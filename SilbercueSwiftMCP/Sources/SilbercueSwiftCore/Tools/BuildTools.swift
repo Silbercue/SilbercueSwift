@@ -77,6 +77,21 @@ enum BuildTools {
         ),
     ]
 
+    // MARK: - Registration
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "build_sim": buildSim
+        case "build_run_sim": buildRunSim
+        case "clean": clean
+        case "discover_projects": discoverProjects
+        case "list_schemes": listSchemes
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
+
     // MARK: - Implementations
 
     static func buildSim(_ args: [String: Value]?) async -> CallTool.Result {

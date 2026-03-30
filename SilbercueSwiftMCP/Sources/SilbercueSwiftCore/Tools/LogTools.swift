@@ -369,7 +369,7 @@ enum LogTools {
     // MARK: - Process name derivation
 
     /// Derive the executable name from an .app bundle's Info.plist (CFBundleExecutable).
-    /// Pattern from MultiDeviceTools.swift — uses PropertyListSerialization, no shell call needed.
+    /// Uses PropertyListSerialization, no shell call needed.
     static func deriveProcessName(from appPath: String) -> String? {
         let plistPath = appPath.hasSuffix("/")
             ? "\(appPath)Info.plist" : "\(appPath)/Info.plist"
@@ -543,6 +543,20 @@ enum LogTools {
             ])
         ),
     ]
+
+    // MARK: - Registration
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "start_log_capture": startLogCapture
+        case "stop_log_capture": stopLogCapture
+        case "read_logs": readLogs
+        case "wait_for_log": waitForLog
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
 
     // MARK: - Handlers
 

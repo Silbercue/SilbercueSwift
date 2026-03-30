@@ -68,6 +68,21 @@ enum GitTools {
         ),
     ]
 
+    // MARK: - Registration
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "git_status": gitStatus
+        case "git_diff": gitDiff
+        case "git_log": gitLog
+        case "git_commit": gitCommit
+        case "git_branch": gitBranch
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
+
     // MARK: - Implementations
 
     static func gitStatus(_ args: [String: Value]?) async -> CallTool.Result {

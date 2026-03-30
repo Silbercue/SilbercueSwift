@@ -82,77 +82,6 @@ enum UITools {
             ])
         ),
         Tool(
-            name: "double_tap",
-            description: "Double-tap at specific coordinates.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "x": .object(["type": .string("number"), "description": .string("X coordinate")]),
-                    "y": .object(["type": .string("number"), "description": .string("Y coordinate")]),
-                ]),
-                "required": .array([.string("x"), .string("y")]),
-            ])
-        ),
-        Tool(
-            name: "long_press",
-            description: "Long-press at specific coordinates.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "x": .object(["type": .string("number"), "description": .string("X coordinate")]),
-                    "y": .object(["type": .string("number"), "description": .string("Y coordinate")]),
-                    "duration_ms": .object(["type": .string("number"), "description": .string("Duration in milliseconds. Default: 1000")]),
-                ]),
-                "required": .array([.string("x"), .string("y")]),
-            ])
-        ),
-        Tool(
-            name: "swipe",
-            description: "Swipe from one point to another.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "start_x": .object(["type": .string("number"), "description": .string("Start X")]),
-                    "start_y": .object(["type": .string("number"), "description": .string("Start Y")]),
-                    "end_x": .object(["type": .string("number"), "description": .string("End X")]),
-                    "end_y": .object(["type": .string("number"), "description": .string("End Y")]),
-                    "duration_ms": .object(["type": .string("number"), "description": .string("Swipe duration in ms. Default: 300")]),
-                ]),
-                "required": .array([.string("start_x"), .string("start_y"), .string("end_x"), .string("end_y")]),
-            ])
-        ),
-        Tool(
-            name: "pinch",
-            description: "Pinch/zoom at a center point. scale > 1 = zoom in, scale < 1 = zoom out.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "center_x": .object(["type": .string("number"), "description": .string("Center X coordinate")]),
-                    "center_y": .object(["type": .string("number"), "description": .string("Center Y coordinate")]),
-                    "scale": .object(["type": .string("number"), "description": .string("Scale factor. >1 = zoom in, <1 = zoom out")]),
-                    "duration_ms": .object(["type": .string("number"), "description": .string("Duration in ms. Default: 500")]),
-                ]),
-                "required": .array([.string("center_x"), .string("center_y"), .string("scale")]),
-            ])
-        ),
-        Tool(
-            name: "drag_and_drop",
-            description: "Drag from source to target. Works with element IDs, coordinates, or mixed. Smart defaults activate drag mode automatically — works for reorderable lists, Kanban boards, sliders, canvas dragging.",
-            inputSchema: .object([
-                "type": .string("object"),
-                "properties": .object([
-                    "source_element": .object(["type": .string("string"), "description": .string("Source element ID from find_element")]),
-                    "target_element": .object(["type": .string("string"), "description": .string("Target element ID from find_element")]),
-                    "from_x": .object(["type": .string("number"), "description": .string("Source X coordinate (alternative to source_element)")]),
-                    "from_y": .object(["type": .string("number"), "description": .string("Source Y coordinate")]),
-                    "to_x": .object(["type": .string("number"), "description": .string("Target X coordinate (alternative to target_element)")]),
-                    "to_y": .object(["type": .string("number"), "description": .string("Target Y coordinate")]),
-                    "press_duration_ms": .object(["type": .string("number"), "description": .string("Long-press duration to activate drag mode (ms). Default: 1000")]),
-                    "hold_duration_ms": .object(["type": .string("number"), "description": .string("Hold at target before drop (ms). Default: 300")]),
-                ]),
-            ])
-        ),
-        Tool(
             name: "type_text",
             description: "Type text into the currently focused element or a specified element.",
             inputSchema: .object([
@@ -187,6 +116,26 @@ enum UITools {
             ])
         ),
     ]
+
+    // MARK: - Registration (Free tools only)
+
+    static let registrations: [ToolRegistration] = tools.compactMap { tool in
+        let handler: (@Sendable ([String: Value]?) async -> CallTool.Result)? = switch tool.name {
+        case "wda_status": wdaStatus
+        case "handle_alert": handleAlert
+        case "wda_create_session": wdaCreateSession
+        case "find_element": findElement
+        case "find_elements": findElements
+        case "click_element": clickElement
+        case "tap_coordinates": tapCoordinates
+        case "type_text": typeText
+        case "get_text": getText
+        case "get_source": getSource
+        default: nil
+        }
+        guard let h = handler else { return nil }
+        return ToolRegistration(tool: tool, handler: h)
+    }
 
     // MARK: - Implementations
 
@@ -428,96 +377,6 @@ enum UITools {
         }
     }
 
-    static func doubleTap(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let x = args?["x"]?.numberValue,
-              let y = args?["y"]?.numberValue else {
-            return .fail("Missing required: x, y")
-        }
-        do {
-            try await WDAClient.shared.doubleTap(x: x, y: y)
-            return .ok("Double-tapped at (\(Int(x)), \(Int(y)))")
-        } catch {
-            return .fail("Double-tap failed: \(error)")
-        }
-    }
-
-    static func longPress(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let x = args?["x"]?.numberValue,
-              let y = args?["y"]?.numberValue else {
-            return .fail("Missing required: x, y")
-        }
-        let durationMs = args?["duration_ms"]?.intValue ?? 1000
-        do {
-            try await WDAClient.shared.longPress(x: x, y: y, durationMs: durationMs)
-            return .ok("Long-pressed at (\(Int(x)), \(Int(y))) for \(durationMs)ms")
-        } catch {
-            return .fail("Long-press failed: \(error)")
-        }
-    }
-
-    static func swipeAction(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let sx = args?["start_x"]?.numberValue,
-              let sy = args?["start_y"]?.numberValue,
-              let ex = args?["end_x"]?.numberValue,
-              let ey = args?["end_y"]?.numberValue else {
-            return .fail("Missing required: start_x, start_y, end_x, end_y")
-        }
-        let durationMs = args?["duration_ms"]?.intValue ?? 300
-        do {
-            try await WDAClient.shared.swipe(startX: sx, startY: sy, endX: ex, endY: ey, durationMs: durationMs)
-            return .ok("Swiped from (\(Int(sx)),\(Int(sy))) to (\(Int(ex)),\(Int(ey)))")
-        } catch {
-            return .fail("Swipe failed: \(error)")
-        }
-    }
-
-    static func pinchAction(_ args: [String: Value]?) async -> CallTool.Result {
-        guard let cx = args?["center_x"]?.numberValue,
-              let cy = args?["center_y"]?.numberValue,
-              let scale = args?["scale"]?.numberValue else {
-            return .fail("Missing required: center_x, center_y, scale")
-        }
-        let durationMs = args?["duration_ms"]?.intValue ?? 500
-        do {
-            try await WDAClient.shared.pinch(centerX: cx, centerY: cy, scale: scale, durationMs: durationMs)
-            return .ok("Pinch at (\(Int(cx)),\(Int(cy))) scale=\(scale)")
-        } catch {
-            return .fail("Pinch failed: \(error)")
-        }
-    }
-
-    static func dragAndDrop(_ args: [String: Value]?) async -> CallTool.Result {
-        let sourceElement = args?["source_element"]?.stringValue
-        let targetElement = args?["target_element"]?.stringValue
-        let fromX = args?["from_x"]?.numberValue
-        let fromY = args?["from_y"]?.numberValue
-        let toX = args?["to_x"]?.numberValue
-        let toY = args?["to_y"]?.numberValue
-        let pressDurationMs = args?["press_duration_ms"]?.intValue ?? 1000
-        let holdDurationMs = args?["hold_duration_ms"]?.intValue ?? 300
-
-        let hasSource = sourceElement != nil || (fromX != nil && fromY != nil)
-        let hasTarget = targetElement != nil || (toX != nil && toY != nil)
-        guard hasSource, hasTarget else {
-            return .fail("Need source (source_element OR from_x+from_y) and target (target_element OR to_x+to_y)")
-        }
-
-        do {
-            let start = CFAbsoluteTimeGetCurrent()
-            try await WDAClient.shared.dragAndDrop(
-                sourceElement: sourceElement, targetElement: targetElement,
-                fromX: fromX, fromY: fromY, toX: toX, toY: toY,
-                pressDurationMs: pressDurationMs, holdDurationMs: holdDurationMs
-            )
-            let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            let srcDesc = sourceElement ?? "(\(Int(fromX!)),\(Int(fromY!)))"
-            let tgtDesc = targetElement ?? "(\(Int(toX!)),\(Int(toY!)))"
-            return .ok("Dragged \(srcDesc) → \(tgtDesc) (\(elapsed)ms)")
-        } catch {
-            return .fail("Drag failed: \(error)")
-        }
-    }
-
     static func typeText(_ args: [String: Value]?) async -> CallTool.Result {
         guard let text = args?["text"]?.stringValue else {
             return .fail("Missing required: text")
@@ -577,27 +436,3 @@ enum UITools {
     }
 }
 
-// MARK: - Value helpers
-
-extension Value {
-    var numberValue: Double? {
-        switch self {
-        case .double(let n): return n
-        case .int(let n): return Double(n)
-        case .string(let s): return Double(s)
-        default: return nil
-        }
-    }
-
-    var intValue: Int? {
-        numberValue.map(Int.init)
-    }
-
-    var boolValue: Bool? {
-        switch self {
-        case .bool(let b): return b
-        case .string(let s): return s == "true" || s == "1"
-        default: return nil
-        }
-    }
-}

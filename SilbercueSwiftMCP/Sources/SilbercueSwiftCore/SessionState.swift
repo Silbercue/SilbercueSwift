@@ -3,16 +3,16 @@ import MCP
 
 /// Session state actor — caches resolved project/scheme/simulator defaults.
 /// Resolution order: explicit parameter → session default → auto-detect → error with options.
-actor SessionState {
-    static let shared = SessionState()
+public actor SessionState {
+    public static let shared = SessionState()
 
     // MARK: - Stored defaults
 
-    private(set) var project: String?
-    private(set) var scheme: String?
-    private(set) var simulator: String?
-    private(set) var bundleId: String?
-    private(set) var appPath: String?
+    public private(set) var project: String?
+    public private(set) var scheme: String?
+    public private(set) var simulator: String?
+    public private(set) var bundleId: String?
+    public private(set) var appPath: String?
 
     // Auto-promotion: consecutive explicit values become defaults
     private var projectStreak: (value: String, count: Int) = ("", 0)
@@ -23,7 +23,7 @@ actor SessionState {
     // MARK: - Resolution (explicit → default → auto-detect)
 
     /// Resolve project path. Caches auto-detected result for the session.
-    func resolveProject(_ explicit: String?) async throws -> String {
+    public func resolveProject(_ explicit: String?) async throws -> String {
         if let explicit {
             trackUsage(value: explicit, streak: &projectStreak, stored: &project)
             return explicit
@@ -37,7 +37,7 @@ actor SessionState {
     }
 
     /// Resolve scheme name. Caches auto-detected result for the session.
-    func resolveScheme(_ explicit: String?, project: String) async throws -> String {
+    public func resolveScheme(_ explicit: String?, project: String) async throws -> String {
         if let explicit {
             trackUsage(value: explicit, streak: &schemeStreak, stored: &scheme)
             return explicit
@@ -51,7 +51,7 @@ actor SessionState {
     }
 
     /// Resolve simulator. NOT cached — booted state can change between calls.
-    func resolveSimulator(_ explicit: String?) async throws -> String {
+    public func resolveSimulator(_ explicit: String?) async throws -> String {
         if let explicit {
             trackUsage(value: explicit, streak: &simulatorStreak, stored: &simulator)
             return explicit
@@ -62,16 +62,16 @@ actor SessionState {
 
     // MARK: - Build info (populated after successful build_sim)
 
-    func setBuildInfo(bundleId: String, appPath: String?) {
+    public func setBuildInfo(bundleId: String, appPath: String?) {
         self.bundleId = bundleId
         self.appPath = appPath
     }
 
-    func resolveBundleId(_ explicit: String?) -> String? {
+    public func resolveBundleId(_ explicit: String?) -> String? {
         explicit ?? bundleId
     }
 
-    func resolveAppPath(_ explicit: String?) -> String? {
+    public func resolveAppPath(_ explicit: String?) -> String? {
         explicit ?? appPath
     }
 
@@ -119,6 +119,12 @@ actor SessionState {
             Log.warn("Auto-promoted session default: \(value) (used \(streak.count)x consecutively)")
         }
     }
+
+    // MARK: - Tool registration
+
+    static let registrations: [ToolRegistration] = [
+        .init(tool: tools[0], handler: handleSetDefaults),
+    ]
 
     // MARK: - Tool definition
 

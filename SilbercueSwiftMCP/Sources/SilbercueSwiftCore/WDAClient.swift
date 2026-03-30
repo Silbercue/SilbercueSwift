@@ -4,18 +4,18 @@ import FoundationNetworking
 #endif
 
 /// Which WDA backend to use for UI automation.
-enum WDABackend: String, Sendable {
+public enum WDABackend: String, Sendable {
     case silbercueWDA   // Our own lightweight WDA replacement
     case originalWDA    // Facebook's WebDriverAgent
 
-    var bundleId: String {
+    public var bundleId: String {
         switch self {
         case .silbercueWDA: return "com.silbercue.wda.runner.xctrunner"
         case .originalWDA:  return "com.facebook.WebDriverAgentRunner.xctrunner"
         }
     }
 
-    var displayName: String {
+    public var displayName: String {
         switch self {
         case .silbercueWDA: return "SilbercueWDA"
         case .originalWDA:  return "Original WDA (Facebook)"
@@ -26,18 +26,18 @@ enum WDABackend: String, Sendable {
 /// Direct HTTP client for WebDriverAgent — no Appium overhead.
 /// WDA runs on http://localhost:8100 by default.
 /// Supports both SilbercueWDA and Original WDA with automatic fallback.
-actor WDAClient {
-    static let shared = WDAClient()
+public actor WDAClient {
+    public static let shared = WDAClient()
 
     private var baseURL = ProcessInfo.processInfo.environment["WDA_BASE_URL"] ?? "http://localhost:8100"
     private var sessionId: String?
     private var knownSessionIds: [String] = []  // Track all created sessions
 
     /// Active WDA backend. Default: SilbercueWDA with fallback to Original WDA.
-    private(set) var backend: WDABackend = .silbercueWDA
+    public private(set) var backend: WDABackend = .silbercueWDA
 
     /// Info message when fallback was triggered (nil = no fallback).
-    private(set) var fallbackInfo: String?
+    public private(set) var fallbackInfo: String?
 
     /// Guard against concurrent deploys.
     private var isDeploying = false
@@ -52,15 +52,15 @@ actor WDAClient {
 
     // MARK: - Configuration
 
-    func setBaseURL(_ url: String) {
+    public func setBaseURL(_ url: String) {
         self.baseURL = url
     }
 
-    func getBaseURL() -> String {
+    public func getBaseURL() -> String {
         return baseURL
     }
 
-    func setBackend(_ newBackend: WDABackend) {
+    public func setBackend(_ newBackend: WDABackend) {
         self.backend = newBackend
         self.fallbackInfo = nil
     }
@@ -136,7 +136,7 @@ actor WDAClient {
     // MARK: - Health Check & Auto-Restart
 
     /// Ping WDA /status with a fast 2s timeout. Returns true if WDA is responsive.
-    func isHealthy() async -> Bool {
+    public func isHealthy() async -> Bool {
         do {
             let (_, statusCode) = try await request(method: "GET", path: "/status", timeout: healthCheckTimeout)
             return statusCode < 400
@@ -146,7 +146,7 @@ actor WDAClient {
     }
 
     /// Restart current backend by terminating and relaunching the xctrunner on the given simulator.
-    func restartWDA(simulator: String = "booted") async throws {
+    public func restartWDA(simulator: String = "booted") async throws {
         let bid = backend.bundleId
         // Kill any lingering WDA process
         let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, bid)
@@ -198,7 +198,7 @@ actor WDAClient {
     /// Deploy SilbercueWDA to the simulator: build-for-testing + start via xcodebuild test.
     /// Returns true if deploy succeeded and server is healthy, false otherwise.
     /// If a deploy is already in progress, waits for it instead of starting a new one.
-    func deploySilbercueWDA(simulator: String = "booted") async -> Bool {
+    public func deploySilbercueWDA(simulator: String = "booted") async -> Bool {
         // H3 fix: If another deploy is in progress, wait for it instead of triggering premature fallback.
         // Actor isolation guarantees isDeploying is checked atomically (no await before the set).
         if isDeploying {
@@ -339,7 +339,7 @@ actor WDAClient {
     /// Health-check with auto-restart and fallback chain.
     /// Always tries in fixed order: healthy? → restart current → deploy SilbercueWDA → fallback Original WDA.
     /// H1 fix: Backend state is only updated AFTER confirming which backend is actually running.
-    func ensureWDARunning(simulator: String = "booted") async throws {
+    public func ensureWDARunning(simulator: String = "booted") async throws {
         // 1. Already healthy? Done — whatever backend is active, it works.
         if await isHealthy() { return }
 
@@ -379,16 +379,16 @@ actor WDAClient {
     // MARK: - Session Management
 
     /// Number of tracked sessions (for leak detection)
-    var sessionCount: Int { knownSessionIds.count }
+    public var sessionCount: Int { knownSessionIds.count }
 
     /// Warning message if too many sessions are open, nil otherwise.
-    var sessionWarning: String? {
+    public var sessionWarning: String? {
         knownSessionIds.count > 2
             ? "⚠️ \(knownSessionIds.count) WDA sessions tracked. Consider deleting unused sessions to avoid resource leaks."
             : nil
     }
 
-    func createSession(bundleId: String? = nil) async throws -> String {
+    public func createSession(bundleId: String? = nil) async throws -> String {
         var capabilities: [String: Any] = [:]
         if let bid = bundleId {
             capabilities["bundleId"] = bid
@@ -414,7 +414,7 @@ actor WDAClient {
         return sessionId
     }
 
-    func deleteSession() async throws {
+    public func deleteSession() async throws {
         guard let sid = sessionId else { return }
         do {
             _ = try await request(method: "DELETE", path: "/session/\(sid)")
@@ -425,7 +425,7 @@ actor WDAClient {
         sessionId = nil
     }
 
-    func ensureSession() async throws -> String {
+    public func ensureSession() async throws -> String {
         if let sid = sessionId {
             // Quick health check with fast timeout
             do {
@@ -446,7 +446,7 @@ actor WDAClient {
 
     // MARK: - Element Finding
 
-    func findElement(using strategy: String, value: String, scroll: Bool = false, direction: String = "auto", maxSwipes: Int = 10) async throws -> (elementId: String, swipes: Int) {
+    public func findElement(using strategy: String, value: String, scroll: Bool = false, direction: String = "auto", maxSwipes: Int = 10) async throws -> (elementId: String, swipes: Int) {
         let sid = try await ensureSession()
         var body: [String: Any] = ["using": strategy, "value": value]
         if scroll {
@@ -468,7 +468,7 @@ actor WDAClient {
         return (elementId, swipes)
     }
 
-    func findElements(using strategy: String, value: String) async throws -> [String] {
+    public func findElements(using strategy: String, value: String) async throws -> [String] {
         let sid = try await ensureSession()
         let json = try await jsonRequest(
             method: "POST",
@@ -484,18 +484,18 @@ actor WDAClient {
 
     // MARK: - Element Interaction
 
-    func click(elementId: String) async throws {
+    public func click(elementId: String) async throws {
         let sid = try await ensureSession()
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/element/\(elementId)/click")
     }
 
-    func getText(elementId: String) async throws -> String {
+    public func getText(elementId: String) async throws -> String {
         let sid = try await ensureSession()
         let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/element/\(elementId)/text")
         return json["value"] as? String ?? ""
     }
 
-    func setValue(elementId: String, text: String) async throws {
+    public func setValue(elementId: String, text: String) async throws {
         let sid = try await ensureSession()
         _ = try await jsonRequest(
             method: "POST",
@@ -504,12 +504,12 @@ actor WDAClient {
         )
     }
 
-    func clearElement(elementId: String) async throws {
+    public func clearElement(elementId: String) async throws {
         let sid = try await ensureSession()
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/element/\(elementId)/clear")
     }
 
-    func getElementAttribute(_ attribute: String, elementId: String) async throws -> String {
+    public func getElementAttribute(_ attribute: String, elementId: String) async throws -> String {
         let sid = try await ensureSession()
         let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/element/\(elementId)/attribute/\(attribute)")
         return json["value"] as? String ?? ""
@@ -517,7 +517,7 @@ actor WDAClient {
 
     // MARK: - Touch Actions (W3C Actions API)
 
-    func tap(x: Double, y: Double) async throws {
+    public func tap(x: Double, y: Double) async throws {
         let sid = try await ensureSession()
         let actions: [String: Any] = [
             "actions": [[
@@ -535,7 +535,7 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
-    func doubleTap(x: Double, y: Double) async throws {
+    public func doubleTap(x: Double, y: Double) async throws {
         let sid = try await ensureSession()
         let actions: [String: Any] = [
             "actions": [[
@@ -557,7 +557,7 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
-    func longPress(x: Double, y: Double, durationMs: Int = 1000) async throws {
+    public func longPress(x: Double, y: Double, durationMs: Int = 1000) async throws {
         let sid = try await ensureSession()
         let actions: [String: Any] = [
             "actions": [[
@@ -575,7 +575,7 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
-    func swipe(startX: Double, startY: Double, endX: Double, endY: Double, durationMs: Int = 300) async throws {
+    public func swipe(startX: Double, startY: Double, endX: Double, endY: Double, durationMs: Int = 300) async throws {
         let sid = try await ensureSession()
         let actions: [String: Any] = [
             "actions": [[
@@ -593,7 +593,7 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
-    func pinch(centerX: Double, centerY: Double, scale: Double, durationMs: Int = 500) async throws {
+    public func pinch(centerX: Double, centerY: Double, scale: Double, durationMs: Int = 500) async throws {
         let sid = try await ensureSession()
         let isZoomIn = scale > 1.0
 
@@ -638,7 +638,7 @@ actor WDAClient {
         _ = try await jsonRequest(method: "POST", path: "/session/\(sid)/actions", body: actions)
     }
 
-    func dragAndDrop(
+    public func dragAndDrop(
         sourceElement: String? = nil, targetElement: String? = nil,
         fromX: Double? = nil, fromY: Double? = nil,
         toX: Double? = nil, toY: Double? = nil,
@@ -662,24 +662,24 @@ actor WDAClient {
 
     // MARK: - Alert Handling
 
-    struct AlertInfo: Sendable {
-        let text: String
-        let buttons: [String]
+    public struct AlertInfo: Sendable {
+        public let text: String
+        public let buttons: [String]
     }
 
-    struct BatchAlertResult: Sendable {
-        let count: Int
-        let alerts: [AlertDetail]
+    public struct BatchAlertResult: Sendable {
+        public let count: Int
+        public let alerts: [AlertDetail]
 
-        struct AlertDetail: Sendable {
-            let text: String
-            let buttons: [String]
-            let source: String
+        public struct AlertDetail: Sendable {
+            public let text: String
+            public let buttons: [String]
+            public let source: String
         }
     }
 
     /// Get alert text. Returns nil if no alert is visible (404 from WDA).
-    func getAlertText() async -> AlertInfo? {
+    public func getAlertText() async -> AlertInfo? {
         guard let sid = try? await ensureSession() else { return nil }
         do {
             let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/alert/text")
@@ -692,7 +692,7 @@ actor WDAClient {
     }
 
     /// Accept the current alert or all visible alerts.
-    func acceptAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
+    public func acceptAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
         let sid = try await ensureSession()
         var body: [String: Any] = [:]
         if let label = buttonLabel { body["name"] = label }
@@ -708,7 +708,7 @@ actor WDAClient {
     }
 
     /// Dismiss the current alert or all visible alerts.
-    func dismissAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
+    public func dismissAlert(buttonLabel: String? = nil, all: Bool = false) async throws -> AlertInfo? {
         let sid = try await ensureSession()
         var body: [String: Any] = [:]
         if let label = buttonLabel { body["name"] = label }
@@ -724,7 +724,7 @@ actor WDAClient {
     }
 
     /// Accept or dismiss all visible alerts in batch. Returns count + details.
-    func handleAllAlerts(accept: Bool) async throws -> BatchAlertResult {
+    public func handleAllAlerts(accept: Bool) async throws -> BatchAlertResult {
         let sid = try await ensureSession()
         let path = accept ? "/session/\(sid)/alert/accept" : "/session/\(sid)/alert/dismiss"
         let json = try await jsonRequest(method: "POST", path: path, body: ["all": true])
@@ -746,7 +746,7 @@ actor WDAClient {
 
     // MARK: - View Hierarchy
 
-    func getSource(format: String = "json") async throws -> String {
+    public func getSource(format: String = "json") async throws -> String {
         // Health check first — getSource bypasses session management, so fail fast if WDA is dead
         guard await isHealthy() else {
             throw WDAError.wdaNotResponding
@@ -760,7 +760,7 @@ actor WDAClient {
 
     // MARK: - Screenshot via WDA
 
-    func wdaScreenshot() async throws -> Data {
+    public func wdaScreenshot() async throws -> Data {
         let sid = try await ensureSession()
         let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/screenshot")
         guard let b64 = json["value"] as? String,
@@ -772,13 +772,13 @@ actor WDAClient {
 
     // MARK: - Device Orientation
 
-    func getOrientation() async throws -> String {
+    public func getOrientation() async throws -> String {
         let sid = try await ensureSession()
         let json = try await jsonRequest(method: "GET", path: "/session/\(sid)/orientation")
         return json["value"] as? String ?? "PORTRAIT"
     }
 
-    func setOrientation(_ orientation: String) async throws -> String {
+    public func setOrientation(_ orientation: String) async throws -> String {
         let sid = try await ensureSession()
         let json = try await jsonRequest(
             method: "POST",
@@ -790,13 +790,13 @@ actor WDAClient {
 
     // MARK: - Status
 
-    struct WDAStatus: Sendable {
-        let ready: Bool
-        let bundleId: String
-        let raw: String
+    public struct WDAStatus: Sendable {
+        public let ready: Bool
+        public let bundleId: String
+        public let raw: String
     }
 
-    func status() async throws -> WDAStatus {
+    public func status() async throws -> WDAStatus {
         let json = try await jsonRequest(method: "GET", path: "/status")
         let value = json["value"] as? [String: Any]
         let ready = value?["ready"] as? Bool ?? false
@@ -808,7 +808,7 @@ actor WDAClient {
 
 // MARK: - Errors
 
-enum WDAError: Error, CustomStringConvertible {
+public enum WDAError: Error, CustomStringConvertible {
     case invalidURL(String)
     case invalidResponse(String)
     case wdaError(Int, String)
@@ -818,7 +818,7 @@ enum WDAError: Error, CustomStringConvertible {
     case wdaNotResponding
     case noBackendAvailable
 
-    var description: String {
+    public var description: String {
         switch self {
         case .invalidURL(let url): return "Invalid URL: \(url)"
         case .invalidResponse(let msg): return "Invalid response: \(msg)"

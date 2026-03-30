@@ -2,6 +2,56 @@
 
 All notable changes to SilbercueSwift are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [3.0.0] - 2026-03-30
+
+### Architecture: Open Core Module Split
+
+SilbercueSwift is now split into two packages:
+
+- **SilbercueSwiftCore** (public, MIT) — 42 Free tools, exported as library
+- **SilbercueSwiftPro** (private) — 13 Pro tools, depends on Core
+
+This is a breaking change for anyone importing `SilbercueSwiftCore` as a library.
+End users (Homebrew, MCP server) are not affected.
+
+#### Changed
+- **ToolRegistry** — refactored from monolithic `switch` to dictionary-based dispatch with `ToolRegistration` struct. Pro module registers its tools dynamically via `ToolRegistry.register()`.
+- **Package.swift** — `SilbercueSwiftCore` is now a library product (importable by Pro and third-party packages)
+- **ScreenshotTools** — Pro TurboCapture path replaced with `ProHooks.screenshotHandler` callback. Free tier unchanged (~310ms via simctl).
+- **All Core infrastructure** made `public` — Shell, SessionState, WDAClient, SimStateCache, AutoDetect, Log, TestTools helpers
+- **`ScreenCaptureKit` framework** moved from Core to Pro module
+
+#### Added
+- `ProHooks.swift` — extension points for Pro module injection (screenshot handler)
+- `ValueExtensions.swift` — `Value.numberValue` extracted and made public
+- `ToolRegistration` struct — pairs Tool schema with async handler for dynamic dispatch
+- `registerFreeTools()` — explicit startup registration replacing implicit aggregation
+
+#### Removed from public repo
+- `FramebufferCapture.swift` — TurboCapture engine (15ms screenshots via IOSurface)
+- `CoreSimCapture.swift` — private API access to simulator framebuffer
+- `VisualTools.swift` — visual regression (baseline + pixel diff)
+- `MultiDeviceTools.swift` — parallel multi-device orchestration
+- `AccessibilityTools.swift` — Dynamic Type rendering checks
+- `LocalizationTools.swift` — multi-language + RTL checks
+- Pro gesture handlers (double_tap, long_press, swipe, pinch, drag_and_drop)
+- Pro test handlers (test_failures, test_coverage, build_and_diagnose)
+
+#### Pro module structure (private repo)
+```
+SilbercueSwiftPro/
+  ProRegistration.swift        — register() entry point
+  FramebufferCapture.swift     — TurboCapture engine
+  CoreSimCapture.swift         — IOSurface direct access
+  Tools/
+    VisualTools.swift           — visual regression
+    MultiDeviceTools.swift      — multi-device checks
+    AccessibilityTools.swift    — accessibility checks
+    LocalizationTools.swift     — localization checks
+    ProGestureTools.swift       — drag_and_drop, swipe, pinch, etc.
+    ProTestTools.swift          — test_failures, test_coverage, build_and_diagnose
+```
+
 ## [2.0.0] - 2026-03-30
 
 ### Added
