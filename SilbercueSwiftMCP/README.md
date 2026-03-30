@@ -28,8 +28,8 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Failure screenshots from xcresult | — | — | **Auto-exported** |
 | Code coverage per file | Basic | — | **Sorted, filterable** |
 | Build error diagnosis | stderr parsing | — | **xcresult JSON with file:line** |
-| Find element | — | Yes | **Yes + auto-scroll** |
-| Tap / swipe / pinch | — | Yes | **Yes** |
+| Find element | — | Yes | **Yes** (+ auto-scroll ^Pro^) |
+| Tap / swipe / pinch | — | Yes | **Tap: Yes** / swipe, pinch ^Pro^ |
 | Drag & drop | — | Coordinates only (3 calls) | **Element-to-element (1 call)** ^Pro^ |
 | Scroll to element | — | Manual swipe loop | **3-tier auto-scroll (1 call)** ^Pro^ |
 | Alert handling | — | Single alert | **3-tier search + batch accept_all** ^Pro^ |
@@ -162,7 +162,7 @@ silbercueswift activate <YOUR-LICENSE-KEY>
 | `test_coverage` | Code coverage per file, sorted and filterable |
 | `build_and_diagnose` | Build + structured errors/warnings from xcresult |
 
-### Simulator (10 tools)
+### Simulator (12 tools)
 
 | Tool | Description |
 |---|---|
@@ -176,6 +176,8 @@ silbercueswift activate <YOUR-LICENSE-KEY>
 | `erase_sim` | Erase simulator content and settings |
 | `delete_sim` | Delete a simulator |
 | `set_orientation` | Rotate device (PORTRAIT, LANDSCAPE_LEFT, LANDSCAPE_RIGHT) via WDA |
+| `sim_status` | Simulator state (booted/shutdown, device type, runtime) |
+| `sim_inspect` | Detailed simulator info (data path, log path, UDID) |
 
 ### UI Automation via WebDriverAgent (15 tools)
 
@@ -223,7 +225,7 @@ These capabilities go beyond what other iOS MCP servers currently offer.
 
 | Tool | Latency |
 |---|---|
-| `screenshot` | **~15ms** (3-tier: CoreSimulator IOSurface → ScreenCaptureKit → simctl) |
+| `screenshot` | Free: **~310ms** (simctl) / Pro: **~15ms** (IOSurface → ScreenCaptureKit → simctl) |
 
 ### Logs (4 tools)
 
@@ -304,6 +306,18 @@ start_log_capture(subsystem: "com.apple.SwiftUI")
 |---|---|
 | `multi_device_check` | Run visual checks across multiple simulators (Dark Mode, Landscape, iPad) — returns layout scores |
 
+### Accessibility (1 tool) ^Pro^
+
+| Tool | Description |
+|---|---|
+| `accessibility_check` | Render screens across Dynamic Type content size categories — detects truncation and layout issues |
+
+### Localization (1 tool) ^Pro^
+
+| Tool | Description |
+|---|---|
+| `localization_check` | Render screens across languages including RTL (Arabic, Hebrew) — detects layout breaks |
+
 ### Session (1 tool)
 
 | Tool | Description |
@@ -379,7 +393,7 @@ test_coverage(project: "MyApp.xcodeproj", scheme: "MyApp", min_coverage: 80)
 
 Measured on M3 MacBook Pro, iOS 26.4 Simulator:
 
-| Action | Konkurrenz (best of) | SilbercueSwift |
+| Action | Competition (best of) | SilbercueSwift |
 |---|---|---|
 | Screenshot | ~0.5s | **~15ms** (30x) |
 | Find element | ~500ms | **~100ms** (5x) |
