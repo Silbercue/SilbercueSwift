@@ -84,7 +84,7 @@ Every app shows 2–3 permission dialogs on first launch. Other servers require 
 ### Install via Homebrew
 
 ```bash
-brew tap silbercue/tools
+brew tap silbercue/silbercue
 brew install silbercueswift
 ```
 
@@ -99,19 +99,25 @@ cp .build/release/SilbercueSwift /usr/local/bin/
 
 ### Configure in Claude Code
 
-Add to your `.mcp.json`:
+The easiest way — one command:
+
+```bash
+claude mcp add SilbercueSwift /opt/homebrew/bin/SilbercueSwift
+```
+
+Or add manually to `~/.claude.json` (global):
 
 ```json
 {
   "mcpServers": {
     "SilbercueSwift": {
-      "command": "SilbercueSwift"
+      "command": "/opt/homebrew/bin/SilbercueSwift"
     }
   }
 }
 ```
 
-Or for global availability, add to `~/.claude/.mcp.json`.
+> **Note:** Use the full path (`/opt/homebrew/bin/SilbercueSwift`). Claude Code starts MCP servers without a full shell PATH, so bare command names won't be found.
 
 ## Free vs Pro
 
