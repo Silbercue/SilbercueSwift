@@ -31,7 +31,7 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Find element | — | Yes | **Yes** (+ auto-scroll ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)) |
 | Tap / swipe / pinch | — | Yes | **Tap: Yes** / swipe, pinch ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
 | Drag & drop | — | Coordinates only (3 calls) | **Element-to-element (1 call)** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
-| Scroll to element | — | Manual swipe loop | **3-tier auto-scroll (1 call)** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
+| Scroll to element | — | Manual swipe loop | **SmartScroll (1 call)** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
 | Alert handling | — | Single alert | **3-tier search + batch accept_all** ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) |
 | iOS 18 ContactsUI dialog | — | — | **Supported** |
 | Screenshot latency | ~0.5s | ~500ms+ | **Free: ~310ms (1.6x)** / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) **~15ms (30x)** |
@@ -49,7 +49,7 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Screenshots faster than any alternative** — Free: ~310ms / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) ~15ms
 
-Even on the free tier, SilbercueSwift screenshots (~310ms) are faster than the competition (~500ms). Pro takes a completely different capture path — no subprocess, no file round-trip — bringing latency down to ~15ms. Agents can take screenshots freely without penalty at either tier.
+Even on the free tier, SilbercueSwift screenshots (~310ms) are faster than the competition (~500ms). Pro enables TurboCapture — bringing latency down to ~15ms. Agents can take screenshots freely without penalty at either tier.
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Structured test results from xcresult bundles** — zero guesswork on failures
 
@@ -73,7 +73,7 @@ Every app shows 2–3 permission dialogs on first launch. Other servers require 
 
 > ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Auto-scroll to off-screen elements** — no more manual swipe loops ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square)
 
-`find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. Three fallback strategies ensure it works with UIKit, SwiftUI, and lazy-loaded lists. No guessing scroll direction.
+`find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. SmartScroll handles UIKit, SwiftUI, and lazy-loaded lists — no guessing scroll direction.
 
 > ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **View hierarchy in 20ms** — 750x faster element inspection
 
@@ -122,13 +122,13 @@ Pro adds 13 tools and faster internals for teams and power users who need the fu
 | | Free | Pro |
 |---|---|---|
 | Build, test, sim management | 42 tools | 55 tools |
-| Screenshot | simctl (~310ms, 1.6x) | Native capture (~15ms, 30x) |
+| Screenshot | simctl (~310ms, 1.6x) | TurboCapture (~15ms, 30x) |
 | Structured test results (xcresult) | Yes | Yes |
 | Find / click / tap / type | Yes | Yes |
 | Alert handling | Single accept/dismiss | + Batch accept_all / dismiss_all |
 | Log capture | Smart + verbose | + App mode, topic filtering |
 | Console capture, git tools | Yes | Yes |
-| Scroll to element | — | Auto-scroll (3-tier) |
+| Scroll to element | — | SmartScroll |
 | Visual regression | — | Baseline + pixel diff |
 | Multi-device check | — | Dark Mode, Landscape, iPad |
 | Accessibility check | — | Dynamic Type rendering |
@@ -186,7 +186,7 @@ Direct HTTP communication with WDA — no Appium, no Node.js, no Python.
 | Tool | Description | Latency |
 |---|---|---|
 | `handle_alert` | **Accept, dismiss, or batch-handle system & in-app alerts** | ~200ms |
-| `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (3-tier: scrollToVisible → calculated drag → iterative with stall detection) | ~100ms |
+| `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (SmartScroll — 3 fallback strategies) | ~100ms |
 | `click_element` | Tap a UI element | ~400ms |
 | `tap_coordinates` / `double_tap` / `long_press` | Coordinate-based gestures | ~200ms |
 | `swipe` / `pinch` | Directional swipe, zoom in/out | ~400-600ms |
@@ -225,7 +225,7 @@ These capabilities go beyond what other iOS MCP servers currently offer.
 
 | Tool | Latency |
 |---|---|
-| `screenshot` | Free: **~310ms** / Pro: **~15ms** (native capture with automatic fallback) |
+| `screenshot` | Free: **~310ms** / Pro: **~15ms** (TurboCapture) |
 
 ### Logs (4 tools)
 
@@ -421,7 +421,7 @@ SilbercueSwift (8.5MB Swift binary)
     ├── BuildTools       → xcodebuild (parallel pipeline, 3-tier app info)
     ├── TestTools        → xcodebuild test + xcresulttool + xccov
     ├── SimTools         → simctl + WDA orientation
-    ├── ScreenshotTools  → native capture (3-tier fallback) → simctl
+    ├── ScreenshotTools  → TurboCapture (Pro) / simctl (Free)
     ├── UITools          → WebDriverAgent (direct HTTP, 3-tier alert search)
     ├── LogTools         → log stream + 4-layer filter (noise, mode, topic, dedup) + regex matching
     ├── ConsoleTools     → stdout/stderr capture
@@ -444,7 +444,7 @@ No Node.js. No Python. No Appium server. No Selenium. One binary.
 
 The core binary and all 42 free tools are **MIT licensed** — see [LICENSE](LICENSE). Use them however you want, commercially or otherwise.
 
-Pro tools (13 additional tools + native fast screenshots) require a [paid license](https://polar.sh/silbercueswift). The license validation code (`LicenseManager.swift`) is included in the source for transparency — you can see exactly what it checks and when.
+Pro tools (13 additional tools + TurboCapture screenshots) require a [paid license](https://polar.sh/silbercueswift). The license validation code (`LicenseManager.swift`) is included in the source for transparency — you can see exactly what it checks and when.
 
 ## Contributing
 
