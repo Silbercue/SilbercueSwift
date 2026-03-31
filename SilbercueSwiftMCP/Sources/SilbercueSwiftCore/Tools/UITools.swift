@@ -118,6 +118,20 @@ enum UITools {
                 ]),
             ])
         ),
+        Tool(
+            name: "navigate",
+            description: "Navigate to a screen in one call: finds element by label, taps it, waits for animation, takes compact screenshot. Replaces 3 separate calls (find + click + screenshot). Use back: true to go back first.",
+            inputSchema: .object([
+                "type": .string("object"),
+                "properties": .object([
+                    "target": .object(["type": .string("string"), "description": .string("Label or accessibility ID of the element to tap (e.g. 'Button & Tap Tests')")]),
+                    "back": .object(["type": .string("boolean"), "description": .string("Tap the back button first before navigating to target. Default: false")]),
+                    "scroll": .object(["type": .string("boolean"), "description": .string("Use SmartScroll if target not visible. Default: false")]),
+                    "settle_ms": .object(["type": .string("number"), "description": .string("Wait time in ms after tap for animations. Default: 300")]),
+                ]),
+                "required": .array([.string("target")]),
+            ])
+        ),
     ]
 
     // MARK: - Registration (Free tools only)
@@ -134,6 +148,7 @@ enum UITools {
         case "type_text": typeText
         case "get_text": getText
         case "get_source": getSource
+        case "navigate": navigate
         default: nil
         }
         guard let h = handler else { return nil }
@@ -461,6 +476,88 @@ enum UITools {
             return .ok("Text: \(text)")
         } catch {
             return .fail("Get text failed: \(error)")
+        }
+    }
+
+    static func navigate(_ args: [String: Value]?) async -> CallTool.Result {
+        guard let target = args?["target"]?.stringValue else {
+            return .fail("Missing required: target")
+        }
+        let back = args?["back"]?.boolValue ?? false
+        let scroll = args?["scroll"]?.boolValue ?? false
+        let settleMs = args?["settle_ms"]?.intValue ?? 300
+
+        // Pro gate: scroll requires Pro (same as find_element)
+        if scroll, !(await LicenseManager.shared.isPro) {
+            return .fail(
+                "navigate with scroll requires [PRO].\n"
+                + "Free: navigate without scroll.\n\n"
+                + "Level up → \(LicenseManager.upgradeURL)")
+        }
+
+        let start = CFAbsoluteTimeGetCurrent()
+        var steps: [String] = []
+
+        do {
+            // Step 1: Back navigation if requested
+            if back {
+                let (backId, _) = try await WDAClient.shared.findElement(
+                    using: "class name", value: "XCUIElementTypeButton",
+                    scroll: false, direction: "auto", maxSwipes: 0
+                )
+                // The first Button in a NavigationBar is typically the back button.
+                // More robust: find by accessibility id "BackButton"
+                let backElementId: String
+                if let (bid, _) = try? await WDAClient.shared.findElement(
+                    using: "accessibility id", value: "BackButton",
+                    scroll: false, direction: "auto", maxSwipes: 0
+                ) {
+                    backElementId = bid
+                } else {
+                    backElementId = backId
+                }
+                try await WDAClient.shared.click(elementId: backElementId)
+                try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)
+                steps.append("back")
+            }
+
+            // Step 2: Find target element — try accessibility id first, then label predicate
+            let (elementId, swipes): (String, Int)
+            if let (eid, sw) = try? await WDAClient.shared.findElement(
+                using: "accessibility id", value: target,
+                scroll: scroll, direction: "auto", maxSwipes: scroll ? 10 : 0
+            ) {
+                (elementId, swipes) = (eid, sw)
+            } else {
+                (elementId, swipes) = try await WDAClient.shared.findElement(
+                    using: "predicate string", value: "label == '\(target)'",
+                    scroll: scroll, direction: "auto", maxSwipes: scroll ? 10 : 0
+                )
+            }
+
+            // Step 3: Click
+            try await WDAClient.shared.click(elementId: elementId)
+
+            // Step 4: Settle
+            try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)
+
+            // Step 5: Screenshot
+            let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+            var scrollNote = ""
+            if swipes > 0 { scrollNote = ", scrolled \(swipes)x" }
+            let text = "Navigated to '\(target)' (\(elementId), \(elapsed)ms\(scrollNote)). [\(steps.isEmpty ? "" : steps.joined(separator: " → ") + " → ")tap → settle \(settleMs)ms]"
+
+            var content: [Tool.Content] = [.text(text: text, annotations: nil, _meta: nil)]
+            if let img = await ActionScreenshot.capture() {
+                content.append(img)
+            }
+            return .init(content: content)
+        } catch {
+            let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+            if steps.isEmpty {
+                return .fail("Navigate failed (\(elapsed)ms): \(error)")
+            }
+            return .fail("Navigate failed after [\(steps.joined(separator: " → "))] (\(elapsed)ms): \(error)")
         }
     }
 
