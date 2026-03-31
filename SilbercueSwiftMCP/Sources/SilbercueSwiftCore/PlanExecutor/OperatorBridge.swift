@@ -1,11 +1,9 @@
 import Foundation
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
+import MCP
 
 /// Optional LLM bridge for adaptive plan steps (judge, handle_unexpected).
-/// Calls Anthropic API directly via URLSession — no SDK dependency.
-/// Without API key: adaptive steps gracefully degrade to SKIP.
+/// Uses MCP Sampling — the client (Claude Code) handles LLM inference.
+/// No API key needed. Uses the user's existing session/plan.
 public actor OperatorBridge {
 
     public struct Decision: Sendable {
@@ -13,30 +11,17 @@ public actor OperatorBridge {
         public let reasoning: String
     }
 
-    private let apiKey: String
-    private let model: String
-    private let timeout: TimeInterval = 5
+    private let server: Server
+    private let preferences: Sampling.ModelPreferences
     private var callCount = 0
     private let maxCalls: Int
 
     public var callsUsed: Int { callCount }
 
-    public init(model: String, maxCalls: Int = 10) throws {
-        if let key = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"], !key.isEmpty {
-            self.apiKey = key
-        } else if let key = ProcessInfo.processInfo.environment["SILBERCUESWIFT_OPERATOR_KEY"], !key.isEmpty {
-            self.apiKey = key
-        } else {
-            throw PlanError.operatorError("No API key. Set ANTHROPIC_API_KEY or SILBERCUESWIFT_OPERATOR_KEY env var.")
-        }
-
-        switch model.lowercased() {
-        case "haiku": self.model = "claude-haiku-4-5-20251001"
-        case "sonnet": self.model = "claude-sonnet-4-6-20250827"
-        case "opus": self.model = "claude-opus-4-6-20250527"
-        default: self.model = model
-        }
+    public init(server: Server, model: String, maxCalls: Int = 10) {
+        self.server = server
         self.maxCalls = maxCalls
+        self.preferences = Self.mapPreferences(model)
     }
 
     /// Ask the operator with a question, optional screenshot, and execution context.
@@ -49,88 +34,83 @@ public actor OperatorBridge {
             throw PlanError.operatorError("Budget exceeded: \(callCount)/\(maxCalls) operator calls used")
         }
 
-        var content: [[String: Any]] = []
+        // Build content blocks
+        var blocks: [Sampling.Message.Content.ContentBlock] = []
         if let ss = screenshotBase64 {
-            content.append([
-                "type": "image",
-                "source": [
-                    "type": "base64",
-                    "media_type": "image/jpeg",
-                    "data": ss,
-                ],
-            ])
+            blocks.append(.image(data: ss, mimeType: "image/jpeg"))
         }
-        content.append([
-            "type": "text",
-            "text": """
-                You are a fast UI test operator. Answer concisely.
+        blocks.append(.text("""
+            Context: \(context)
 
-                Context: \(context)
+            Question: \(question)
 
-                Question: \(question)
+            Respond with JSON only: {"action": "accept|dismiss|skip|abort|continue", "reasoning": "one line"}
+            """))
 
-                Respond with JSON only: {"action": "accept|dismiss|skip|abort|continue", "reasoning": "one line"}
-                """,
-        ])
+        let content: Sampling.Message.Content = blocks.count == 1
+            ? .single(blocks[0])
+            : .multiple(blocks)
 
-        let body: [String: Any] = [
-            "model": model,
-            "max_tokens": 150,
-            "messages": [["role": "user", "content": content]],
-        ]
-
-        let jsonData = try JSONSerialization.data(withJSONObject: body)
-
-        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        request.httpMethod = "POST"
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = jsonData
-        request.timeoutInterval = timeout
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PlanError.operatorError("Non-HTTP response from Anthropic API")
-        }
-        guard httpResponse.statusCode == 200 else {
-            let body = String(data: data, encoding: .utf8) ?? "no body"
-            throw PlanError.operatorError("Anthropic API \(httpResponse.statusCode): \(body)")
-        }
+        let result = try await server.requestSampling(
+            messages: [.user(content)],
+            modelPreferences: preferences,
+            systemPrompt: "You are a fast UI test operator. Answer concisely with JSON only.",
+            temperature: 0.0,
+            maxTokens: 150
+        )
 
         callCount += 1
-        return try parseDecision(data)
+        return try parseResult(result)
     }
 
-    private nonisolated func parseDecision(_ data: Data) throws -> Decision {
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let contentArray = json["content"] as? [[String: Any]],
-              let firstBlock = contentArray.first,
-              let text = firstBlock["text"] as? String else {
-            throw PlanError.operatorError("Cannot parse Anthropic response")
+    // MARK: - Parsing
+
+    private nonisolated func parseResult(_ result: CreateSamplingMessage.Result) throws -> Decision {
+        // Extract text from response content
+        let text: String
+        switch result.content {
+        case .single(.text(let t)):
+            text = t
+        case .multiple(let blocks):
+            guard let t = blocks.compactMap({ if case .text(let s) = $0 { return s }; return nil }).first else {
+                throw PlanError.operatorError("No text in sampling response")
+            }
+            text = t
+        default:
+            throw PlanError.operatorError("Unexpected sampling response content")
         }
 
-        let jsonStr: String
-        if let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") {
-            jsonStr = String(text[start...end])
-        } else {
+        // Extract JSON from text
+        guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") else {
             throw PlanError.operatorError("No JSON in operator response: \(text)")
         }
-
-        guard let decisionData = jsonStr.data(using: .utf8),
-              let decision = try JSONSerialization.jsonObject(with: decisionData) as? [String: Any],
-              let action = decision["action"] as? String else {
+        let jsonStr = String(text[start...end])
+        guard let data = jsonStr.data(using: .utf8),
+              let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let action = dict["action"] as? String else {
             throw PlanError.operatorError("Invalid decision JSON: \(jsonStr)")
         }
-
-        return Decision(action: action, reasoning: decision["reasoning"] as? String ?? "")
+        return Decision(action: action, reasoning: dict["reasoning"] as? String ?? "")
     }
 
-    /// Factory: create bridge if model specified. Returns nil (no error) if no model.
-    /// Throws if model specified but no API key.
-    public static func create(model: String?, maxCalls: Int = 10) throws -> OperatorBridge? {
-        guard let model, !model.isEmpty else { return nil }
-        return try OperatorBridge(model: model, maxCalls: maxCalls)
+    // MARK: - Model Preferences
+
+    private static func mapPreferences(_ model: String) -> Sampling.ModelPreferences {
+        switch model.lowercased() {
+        case "haiku":
+            return .init(hints: [.init(name: "haiku")], costPriority: 0.8, speedPriority: 0.9, intelligencePriority: 0.3)
+        case "sonnet":
+            return .init(hints: [.init(name: "sonnet")], costPriority: 0.5, speedPriority: 0.5, intelligencePriority: 0.7)
+        case "opus":
+            return .init(hints: [.init(name: "opus")], costPriority: 0.2, speedPriority: 0.2, intelligencePriority: 1.0)
+        default:
+            return .init(hints: [.init(name: model)])
+        }
+    }
+
+    /// Factory: create bridge if model and server available. Returns nil if no model.
+    public static func create(server: Server?, model: String?, maxCalls: Int = 10) -> OperatorBridge? {
+        guard let server, let model, !model.isEmpty else { return nil }
+        return OperatorBridge(server: server, model: model, maxCalls: maxCalls)
     }
 }
