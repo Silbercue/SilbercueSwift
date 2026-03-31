@@ -68,7 +68,8 @@ public final class PlanExecutor {
 
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
         let passCount = results.filter { if case .passed = $0.status { return true }; return false }.count
-        let allPassed = passCount == results.count
+        let failCount = results.filter { if case .failed = $0.status { return true }; return false }.count
+        let allPassed = failCount == 0
 
         return ReportBuilder.PlanResult(
             steps: results,

@@ -429,20 +429,23 @@ struct ReportBuilderTests {
         #expect(report.contains("\"btn\" not found"))
     }
 
-    @Test("Report with skipped steps")
+    @Test("Report with skipped steps — skips are not failures")
     func reportWithSkipped() {
         let result = ReportBuilder.PlanResult(
             steps: [
-                .init(index: 0, description: "judge", status: .skipped("No operator configured"), elapsedMs: 0),
+                .init(index: 0, description: "navigate", status: .passed, elapsedMs: 50),
+                .init(index: 1, description: "judge", status: .skipped("No operator configured"), elapsedMs: 0),
+                .init(index: 2, description: "screenshot", status: .passed, elapsedMs: 10),
             ],
             screenshots: [],
-            passed: false,
-            summary: "0/1 passed (0ms)",
-            elapsedMs: 0
+            passed: true,  // no failures → passed
+            summary: "2/3 passed (60ms)",
+            elapsedMs: 60
         )
         let report = ReportBuilder.buildReport(result)
         #expect(report.contains("[SKIP]"))
         #expect(report.contains("No operator configured"))
+        #expect(report.contains("Plan executed:"))  // not "Plan FAILED"
     }
 
     @Test("MCP response includes screenshots")
