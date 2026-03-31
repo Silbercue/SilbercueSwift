@@ -229,10 +229,16 @@ public actor WDAClient {
             projectDir = envDir
         } else {
             // Try relative to this binary's known repo layout: <repo>/SilbercueWDA
-            let candidates = [
+            var candidates = [
                 FileManager.default.currentDirectoryPath + "/SilbercueWDA",
                 FileManager.default.currentDirectoryPath + "/../SilbercueWDA",
             ]
+            // Homebrew: binary in <prefix>/bin, WDA in <prefix>/share/silbercueswift/SilbercueWDA
+            if let binaryPath = ProcessInfo.processInfo.arguments.first {
+                let binDir = URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path
+                let prefix = URL(fileURLWithPath: binDir).deletingLastPathComponent().path
+                candidates.append(prefix + "/share/silbercueswift/SilbercueWDA")
+            }
             guard let found = candidates.first(where: {
                 FileManager.default.fileExists(atPath: $0 + "/SilbercueWDA.xcodeproj")
             }) else {

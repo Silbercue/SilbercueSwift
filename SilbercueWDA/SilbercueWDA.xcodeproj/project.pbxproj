@@ -1,0 +1,450 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		224856B587FA7C9903603D25 /* SilbercueWDATest.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5262A5C422A19FCB3CFD246 /* SilbercueWDATest.swift */; };
+		50F2952BEC13B45DDF73F644 /* SessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86960BF514B43E9286D2C80B /* SessionManager.swift */; };
+		829BA92168DCC62702BA3B7B /* SilbercueWDAServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F269573EA5AFB5B4ADA7E8 /* SilbercueWDAServer.swift */; };
+		91C26A88B1256B035BEDE72A /* XCUIBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E074CA72112B13332B8BF4 /* XCUIBridge.swift */; };
+		9E6F6474AF131514BD68E7E3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33BEC7D0B9F7879CC3508E33 /* main.swift */; };
+		D3E7DBB405DB3CD034B1C165 /* FlyingFox in Frameworks */ = {isa = PBXBuildFile; productRef = 8904279EAB874DF8513C2710 /* FlyingFox */; };
+		D9A8C862452661FEC21854A7 /* Errors.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2D2C7459E3489FB9121BC1 /* Errors.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		22F269573EA5AFB5B4ADA7E8 /* SilbercueWDAServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilbercueWDAServer.swift; sourceTree = "<group>"; };
+		33BEC7D0B9F7879CC3508E33 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		4C6DB7938D3691EA92E33E67 /* SilbercueWDACLI */ = {isa = PBXFileReference; includeInIndex = 0; path = SilbercueWDACLI; sourceTree = BUILT_PRODUCTS_DIR; };
+		64E074CA72112B13332B8BF4 /* XCUIBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XCUIBridge.swift; sourceTree = "<group>"; };
+		6E2D2C7459E3489FB9121BC1 /* Errors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Errors.swift; sourceTree = "<group>"; };
+		7653796F387D3A55C3D3E670 /* SilbercueWDARunner.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SilbercueWDARunner.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		86960BF514B43E9286D2C80B /* SessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionManager.swift; sourceTree = "<group>"; };
+		B5262A5C422A19FCB3CFD246 /* SilbercueWDATest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilbercueWDATest.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		562AB93FF30AD9B39C591102 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D3E7DBB405DB3CD034B1C165 /* FlyingFox in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0236B21C7E3FC970AA7D1610 /* SilbercueWDAShared */ = {
+			isa = PBXGroup;
+			children = (
+				6E2D2C7459E3489FB9121BC1 /* Errors.swift */,
+			);
+			name = SilbercueWDAShared;
+			path = Sources/SilbercueWDAShared;
+			sourceTree = "<group>";
+		};
+		564982F7780CF14CFEF29955 /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				64E074CA72112B13332B8BF4 /* XCUIBridge.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
+		57C6D425312ECD6569CE56C2 /* Server */ = {
+			isa = PBXGroup;
+			children = (
+				22F269573EA5AFB5B4ADA7E8 /* SilbercueWDAServer.swift */,
+			);
+			path = Server;
+			sourceTree = "<group>";
+		};
+		7D405784EF7D96AEAFF34CCB /* SilbercueWDARunner */ = {
+			isa = PBXGroup;
+			children = (
+				B5262A5C422A19FCB3CFD246 /* SilbercueWDATest.swift */,
+				564982F7780CF14CFEF29955 /* Bridge */,
+				57C6D425312ECD6569CE56C2 /* Server */,
+				91AD88170CC665C7F97AD24E /* Session */,
+			);
+			path = SilbercueWDARunner;
+			sourceTree = "<group>";
+		};
+		91AD88170CC665C7F97AD24E /* Session */ = {
+			isa = PBXGroup;
+			children = (
+				86960BF514B43E9286D2C80B /* SessionManager.swift */,
+			);
+			path = Session;
+			sourceTree = "<group>";
+		};
+		AC09058D181DBFAFA13CBD15 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4C6DB7938D3691EA92E33E67 /* SilbercueWDACLI */,
+				7653796F387D3A55C3D3E670 /* SilbercueWDARunner.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		B5C2F5D4CEE7A3281A5DFE3D /* SilbercueWDACLI */ = {
+			isa = PBXGroup;
+			children = (
+				33BEC7D0B9F7879CC3508E33 /* main.swift */,
+			);
+			name = SilbercueWDACLI;
+			path = Sources/SilbercueWDACLI;
+			sourceTree = "<group>";
+		};
+		E06DD0BF2520CC6389BF4340 = {
+			isa = PBXGroup;
+			children = (
+				B5C2F5D4CEE7A3281A5DFE3D /* SilbercueWDACLI */,
+				7D405784EF7D96AEAFF34CCB /* SilbercueWDARunner */,
+				0236B21C7E3FC970AA7D1610 /* SilbercueWDAShared */,
+				AC09058D181DBFAFA13CBD15 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		278593408E8E4B39C52D3DFB /* SilbercueWDARunner */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A9DB7DA46CFB39D98E70C3E8 /* Build configuration list for PBXNativeTarget "SilbercueWDARunner" */;
+			buildPhases = (
+				50C8BB5F3E90633004D786DF /* Sources */,
+				562AB93FF30AD9B39C591102 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SilbercueWDARunner;
+			packageProductDependencies = (
+				8904279EAB874DF8513C2710 /* FlyingFox */,
+			);
+			productName = SilbercueWDARunner;
+			productReference = 7653796F387D3A55C3D3E670 /* SilbercueWDARunner.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		7BBDE5A8BDCAB571E35401DA /* SilbercueWDACLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 481A64ECEAE87574499FF041 /* Build configuration list for PBXNativeTarget "SilbercueWDACLI" */;
+			buildPhases = (
+				5510D83A7674885666E9F4C7 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SilbercueWDACLI;
+			packageProductDependencies = (
+			);
+			productName = SilbercueWDACLI;
+			productReference = 4C6DB7938D3691EA92E33E67 /* SilbercueWDACLI */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F299BF13B04D5181420CB15C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 6521BBD779D79A0AF98E0DCF /* Build configuration list for PBXProject "SilbercueWDA" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E06DD0BF2520CC6389BF4340;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				673E74D8B218A301B2054292 /* XCRemoteSwiftPackageReference "FlyingFox" */,
+			);
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				7BBDE5A8BDCAB571E35401DA /* SilbercueWDACLI */,
+				278593408E8E4B39C52D3DFB /* SilbercueWDARunner */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		50C8BB5F3E90633004D786DF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				50F2952BEC13B45DDF73F644 /* SessionManager.swift in Sources */,
+				829BA92168DCC62702BA3B7B /* SilbercueWDAServer.swift in Sources */,
+				224856B587FA7C9903603D25 /* SilbercueWDATest.swift in Sources */,
+				91C26A88B1256B035BEDE72A /* XCUIBridge.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5510D83A7674885666E9F4C7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D9A8C862452661FEC21854A7 /* Errors.swift in Sources */,
+				9E6F6474AF131514BD68E7E3 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		16EA85EF12DF342D20830707 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		671E319ECC8F26249C7F038F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A36BB3B60DC39BCA51950E55 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.silbercue.wda.SilbercueWDACLI;
+				PRODUCT_NAME = "silbercue-wda";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		BB9EC33FC7C637E780DA4FAF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.silbercue.wda.runner;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "";
+				TEST_TARGET_NAME = "";
+			};
+			name = Debug;
+		};
+		BE43158A28C6881FE9B3B3B1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.silbercue.wda.runner;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "";
+				TEST_TARGET_NAME = "";
+			};
+			name = Release;
+		};
+		F9B8E9B4FD1195FE3B11388A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.silbercue.wda.SilbercueWDACLI;
+				PRODUCT_NAME = "silbercue-wda";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		481A64ECEAE87574499FF041 /* Build configuration list for PBXNativeTarget "SilbercueWDACLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A36BB3B60DC39BCA51950E55 /* Debug */,
+				F9B8E9B4FD1195FE3B11388A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6521BBD779D79A0AF98E0DCF /* Build configuration list for PBXProject "SilbercueWDA" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				671E319ECC8F26249C7F038F /* Debug */,
+				16EA85EF12DF342D20830707 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A9DB7DA46CFB39D98E70C3E8 /* Build configuration list for PBXNativeTarget "SilbercueWDARunner" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB9EC33FC7C637E780DA4FAF /* Debug */,
+				BE43158A28C6881FE9B3B3B1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		673E74D8B218A301B2054292 /* XCRemoteSwiftPackageReference "FlyingFox" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/swhitty/FlyingFox.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.16.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8904279EAB874DF8513C2710 /* FlyingFox */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 673E74D8B218A301B2054292 /* XCRemoteSwiftPackageReference "FlyingFox" */;
+			productName = FlyingFox;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F299BF13B04D5181420CB15C /* Project object */;
+}

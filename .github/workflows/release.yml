@@ -38,15 +38,31 @@ jobs:
           # Ad-hoc code sign
           codesign -s - "$BINARY"
 
+          # Staging: Binary + WDA source nebeneinander
+          STAGING="release-staging"
+          mkdir -p "$STAGING/SilbercueWDA"
+
+          cp "$BINARY" "$STAGING/"
+          cp -R SilbercueWDA/SilbercueWDA.xcodeproj "$STAGING/SilbercueWDA/"
+          cp -R SilbercueWDA/SilbercueWDARunner "$STAGING/SilbercueWDA/"
+          cp -R SilbercueWDA/Sources "$STAGING/SilbercueWDA/"
+          cp    SilbercueWDA/project.yml "$STAGING/SilbercueWDA/" 2>/dev/null || true
+
           # Create tarball
           TARBALL="silbercueswift-${TAG_NAME}-macos-arm64.tar.gz"
-          tar -czf "$TARBALL" -C SilbercueSwiftMCP/.build/release SilbercueSwift
+          tar -czf "$TARBALL" -C "$STAGING" SilbercueSwift SilbercueWDA
 
           # Compute SHA256
           SHA=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)
 
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tarball contents
+        env:
+          TARBALL: ${{ steps.assets.outputs.tarball }}
+        run: |
+          tar -tzf "$TARBALL" | grep -q "SilbercueWDA/SilbercueWDA.xcodeproj/project.pbxproj"
 
       - name: Create GitHub Release
         env:

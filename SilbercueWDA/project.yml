@@ -1,0 +1,50 @@
+name: SilbercueWDA
+options:
+  bundleIdPrefix: com.silbercue.wda
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+
+packages:
+  FlyingFox:
+    url: https://github.com/swhitty/FlyingFox.git
+    from: "0.16.0"
+
+targets:
+  SilbercueWDARunner:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - SilbercueWDARunner
+    dependencies:
+      - package: FlyingFox
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.silbercue.wda.runner
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: true
+        TEST_HOST: ""
+        TEST_TARGET_NAME: ""
+        BUNDLE_LOADER: ""
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        SUPPORTS_MACCATALYST: false
+
+  SilbercueWDACLI:
+    type: tool
+    platform: macOS
+    sources:
+      - Sources/SilbercueWDACLI
+      - Sources/SilbercueWDAShared
+    settings:
+      base:
+        PRODUCT_NAME: silbercue-wda
+        SWIFT_VERSION: "6.0"
+
+schemes:
+  SilbercueWDARunner:
+    build:
+      targets:
+        SilbercueWDARunner: [testing]
+    test:
+      targets:
+        - SilbercueWDARunner
