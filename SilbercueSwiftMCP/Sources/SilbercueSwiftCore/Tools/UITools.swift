@@ -501,20 +501,26 @@ enum UITools {
         do {
             // Step 1: Back navigation if requested
             if back {
-                let (backId, _) = try await WDAClient.shared.findElement(
-                    using: "class name", value: "XCUIElementTypeButton",
-                    scroll: false, direction: "auto", maxSwipes: 0
-                )
-                // The first Button in a NavigationBar is typically the back button.
-                // More robust: find by accessibility id "BackButton"
+                // Try BackButton accessibility id first (SwiftUI NavigationStack),
+                // then Back button label, then first button as last resort
                 let backElementId: String
                 if let (bid, _) = try? await WDAClient.shared.findElement(
                     using: "accessibility id", value: "BackButton",
                     scroll: false, direction: "auto", maxSwipes: 0
                 ) {
                     backElementId = bid
+                } else if let (bid, _) = try? await WDAClient.shared.findElement(
+                    using: "predicate string", value: "label == 'Back'",
+                    scroll: false, direction: "auto", maxSwipes: 0
+                ) {
+                    backElementId = bid
                 } else {
-                    backElementId = backId
+                    // Last resort: first button in the NavigationBar
+                    let (bid, _) = try await WDAClient.shared.findElement(
+                        using: "class chain", value: "**/XCUIElementTypeNavigationBar/XCUIElementTypeButton[1]",
+                        scroll: false, direction: "auto", maxSwipes: 0
+                    )
+                    backElementId = bid
                 }
                 try await WDAClient.shared.click(elementId: backElementId)
                 try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)
