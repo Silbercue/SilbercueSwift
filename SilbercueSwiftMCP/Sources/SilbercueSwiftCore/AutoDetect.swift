@@ -46,8 +46,12 @@ public enum AutoDetect {
         case 1:
             return booted[0].udid
         default:
-            // Multiple booted — pick newest runtime (deterministic)
-            let sorted = booted.sorted { $0.runtime.localizedStandardCompare($1.runtime) == .orderedDescending }
+            // Multiple booted — pick newest runtime, tiebreak by UDID for determinism
+            let sorted = booted.sorted { a, b in
+                let cmp = a.runtime.localizedStandardCompare(b.runtime)
+                if cmp != .orderedSame { return cmp == .orderedDescending }
+                return a.udid < b.udid
+            }
             let picked = sorted[0]
             let others = sorted.dropFirst().map { "\($0.name) (\($0.runtime))" }.joined(separator: ", ")
             Log.warn("Auto-picked \(picked.name) (\(picked.runtime)) from \(booted.count) booted sims (skipped: \(others))")

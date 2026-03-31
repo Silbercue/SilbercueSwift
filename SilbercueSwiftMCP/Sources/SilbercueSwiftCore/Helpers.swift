@@ -1,6 +1,12 @@
 import Foundation
 import MCP
 
+// MARK: - Version (single source of truth — update on each release)
+
+public enum SilbercueSwiftVersion {
+    public static let current = "3.2.2"
+}
+
 // MARK: - Debug Logging (stderr, safe for MCP stdio transport)
 
 public enum Log {
@@ -76,21 +82,27 @@ public enum ActionScreenshot {
     }
 
     /// Quick fallback: first booted simulator UDID (no disambiguation error).
+    /// Picks newest runtime, tiebreaks by UDID for determinism.
     private static func firstBootedSimulator() async -> String? {
         guard let result = try? await Shell.xcrun(timeout: 10, "simctl", "list", "devices", "booted", "-j"),
               result.succeeded,
               let data = result.stdout.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let devices = json["devices"] as? [String: [[String: Any]]] else { return nil }
-        for (_, deviceList) in devices {
+        var booted: [(udid: String, runtime: String)] = []
+        for (runtime, deviceList) in devices {
             for device in deviceList {
                 if let state = device["state"] as? String, state == "Booted",
                    let udid = device["udid"] as? String {
-                    return udid
+                    booted.append((udid, runtime))
                 }
             }
         }
-        return nil
+        return booted.sorted { a, b in
+            let cmp = a.runtime.localizedStandardCompare(b.runtime)
+            if cmp != .orderedSame { return cmp == .orderedDescending }
+            return a.udid < b.udid
+        }.first?.udid
     }
 }
 
