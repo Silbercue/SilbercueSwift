@@ -42,11 +42,11 @@ if cliArgs.count >= 2 {
         }
         #endif
         let toolCount = ToolRegistry.allTools().count
-        fputs("SilbercueSwift \(tier) — \(toolCount) tools available\n", stderr)
+        fputs("SilbercueSwift v\(SilbercueSwiftVersion.current) \(tier) — \(toolCount) tools available\n", stderr)
         Foundation.exit(0)
 
     case "version":
-        fputs("SilbercueSwift 3.0.0\n", stderr)
+        fputs("SilbercueSwift v\(SilbercueSwiftVersion.current)\n", stderr)
         Foundation.exit(0)
 
     default:
@@ -68,7 +68,7 @@ if await LicenseManager.shared.isPro {
 
 let server = Server(
     name: "SilbercueSwift",
-    version: "3.0.0",
+    version: SilbercueSwiftVersion.current,
     capabilities: .init(tools: .init(listChanged: true))
 )
 

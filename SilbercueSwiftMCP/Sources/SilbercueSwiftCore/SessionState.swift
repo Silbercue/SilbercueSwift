@@ -63,6 +63,8 @@ public actor SessionState {
             raw = stored
         } else {
             let udid = try await AutoDetect.simulator()
+            self.simulator = udid
+            Log.warn("Auto-detected simulator: \(udid) (cached for session — use set_defaults to change)")
             initNativeInputIfNeeded(udid: udid)
             return udid
         }
@@ -99,7 +101,7 @@ public actor SessionState {
         var lines = ["Session defaults:"]
         lines.append("  project:   \(project ?? "(auto-detect)")")
         lines.append("  scheme:    \(scheme ?? "(auto-detect)")")
-        lines.append("  simulator: \(simulator ?? "(auto-detect — queries booted sim each call)")")
+        lines.append("  simulator: \(simulator ?? "(auto-detect on first use, then cached)")")
         lines.append("  bundle_id: \(bundleId ?? "(from last build)")")
         lines.append("  app_path:  \(appPath ?? "(from last build)")")
         return lines.joined(separator: "\n")
