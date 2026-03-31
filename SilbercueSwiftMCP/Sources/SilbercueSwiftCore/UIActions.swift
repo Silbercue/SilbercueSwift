@@ -174,7 +174,7 @@ public enum UIActions {
         let escapedTarget = target.replacingOccurrences(of: "'", with: "\\'")
         let (elementId, swipes) = try await WDAClient.shared.findElement(
             using: "predicate string",
-            value: "name == '\(escapedTarget)' OR label == '\(escapedTarget)'",
+            value: "label == '\(escapedTarget)' OR identifier == '\(escapedTarget)'",
             scroll: scroll, direction: "auto", maxSwipes: scroll ? 10 : 0
         )
 
@@ -307,7 +307,7 @@ public enum UIActions {
         let rawType = node["type"] as? String ?? ""
         let type = rawType.hasPrefix("XCUIElementType") ? String(rawType.dropFirst("XCUIElementType".count)) : rawType
 
-        if type == "Button", let rect = node["rect"] as? [String: Any] {
+        if type == "Button", let rect = (node["frame"] ?? node["rect"]) as? [String: Any] {
             func intVal(_ key: String) -> Int? {
                 if let v = rect[key] as? Int { return v }
                 if let v = rect[key] as? Double { return Int(v) }
