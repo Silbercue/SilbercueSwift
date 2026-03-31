@@ -83,6 +83,7 @@ enum ScreenshotTools {
         sim: String, format: String, compact: Bool, start: CFAbsoluteTime
     ) async -> CallTool.Result {
         let outputPath = "/tmp/ss-screenshot.\(format)"
+        let simLabel = await SimTools.displayName(for: sim)
         do {
             let result = try await Shell.xcrun(
                 timeout: 15, "simctl", "io", sim, "screenshot",
@@ -97,7 +98,7 @@ enum ScreenshotTools {
                     if compact, let downscaled = ImageUtils.downscale(data: data, scaleFactor: 3) {
                         return .init(content: [
                             .image(data: downscaled.base64EncodedString(), mimeType: "image/jpeg", annotations: nil, _meta: nil),
-                            .text(text: "compact | ~\(downscaled.count / 1024)KB | \(elapsed)ms (simctl)", annotations: nil, _meta: nil),
+                            .text(text: "compact | ~\(downscaled.count / 1024)KB | \(elapsed)ms (simctl) | \(simLabel)", annotations: nil, _meta: nil),
                         ])
                     }
                     let mimeType = format.hasPrefix("jp") ? "image/jpeg" : "image/png"
@@ -106,11 +107,11 @@ enum ScreenshotTools {
                             data: data.base64EncodedString(), mimeType: mimeType,
                             annotations: nil, _meta: nil),
                         .text(
-                            text: "\(data.count / 1024)KB | \(elapsed)ms (simctl)",
+                            text: "\(data.count / 1024)KB | \(elapsed)ms (simctl) | \(simLabel)",
                             annotations: nil, _meta: nil),
                     ])
                 }
-                return .ok("Screenshot saved: \(outputPath) | \(elapsed)ms (simctl)")
+                return .ok("Screenshot saved: \(outputPath) | \(elapsed)ms (simctl) | \(simLabel)")
             }
             return .fail("Screenshot failed: \(result.stderr)")
         } catch {

@@ -331,15 +331,21 @@ public actor WDAClient {
               let devices = json["devices"] as? [String: [[String: Any]]] else {
             return simulator
         }
-        for (_, sims) in devices {
+        // Collect all booted sims, pick newest runtime (deterministic)
+        var booted: [(udid: String, runtime: String)] = []
+        for (runtime, sims) in devices {
+            let runtimeName = runtime.split(separator: ".").last.map(String.init) ?? runtime
             for sim in sims {
                 if let state = sim["state"] as? String, state == "Booted",
                    let udid = sim["udid"] as? String {
-                    return udid
+                    booted.append((udid, runtimeName))
                 }
             }
         }
-        return simulator
+        guard let best = booted.sorted(by: { $0.runtime.localizedStandardCompare($1.runtime) == .orderedDescending }).first else {
+            return simulator
+        }
+        return best.udid
     }
 
     /// Health-check with auto-restart and fallback chain.
@@ -460,11 +466,20 @@ public actor WDAClient {
             body["direction"] = direction
             body["maxSwipes"] = maxSwipes
         }
-        let json = try await jsonRequest(
-            method: "POST",
-            path: "/session/\(sid)/element",
-            body: body
-        )
+        let json: [String: Any]
+        do {
+            json = try await jsonRequest(
+                method: "POST",
+                path: "/session/\(sid)/element",
+                body: body
+            )
+        } catch let error as WDAError {
+            // Enrich 404 errors with session context so the LLM knows the real cause
+            if case .wdaError(let code, _) = error, code == 404 {
+                throw WDAError.elementNotFound(strategy, "\(value) — session \(sid.prefix(8))… may target wrong app. Try wda_create_session(bundle_id:) first.")
+            }
+            throw error
+        }
 
         guard let element = json["value"] as? [String: Any],
               let elementId = element["ELEMENT"] as? String ?? element.values.first as? String else {
