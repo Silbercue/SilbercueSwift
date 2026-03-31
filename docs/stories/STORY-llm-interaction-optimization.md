@@ -412,11 +412,11 @@ Optionale Parameter:
 - ToolRegistry: Registrierung im Free-Tier (Navigation ist Basis-Funktionalitaet)
 
 **Akzeptanzkriterien:**
-- [ ] navigate(target: "X") findet Element, tippt, wartet, screenshottet
-- [ ] navigate(target: "X", back: true) navigiert erst zurueck dann vorwaerts
-- [ ] navigate(target: "X", scroll: true) nutzt SmartScroll wenn noetig
-- [ ] Fehlermeldung wenn Element nicht gefunden wird
-- [ ] Screenshot nutzt compact-Qualitaet
+- [x] navigate(target: "X") findet Element, tippt, wartet, screenshottet
+- [x] navigate(target: "X", back: true) navigiert erst zurueck dann vorwaerts
+- [x] navigate(target: "X", scroll: true) nutzt SmartScroll wenn noetig (Pro gate)
+- [x] Fehlermeldung wenn Element nicht gefunden wird
+- [x] Screenshot nutzt compact-Qualitaet (via ActionScreenshot.capture)
 
 **Geschaetzte Ersparnis:** 12-18 Tool-Calls pro Session mit UI-Navigation
 
