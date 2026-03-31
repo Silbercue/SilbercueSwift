@@ -154,6 +154,11 @@ public enum RunPlanDecideTool {
     public static let registration = ToolRegistration(tool: tool, handler: handle)
 
     static func handle(_ args: [String: Value]?) async -> CallTool.Result {
+        // Pro gate (run_plan_decide is part of the run_plan Pro feature)
+        if !(await LicenseManager.shared.isPro) {
+            return .fail("run_plan_decide is a [PRO] feature — part of run_plan.\n\nLevel up here → \(LicenseManager.upgradeURL)")
+        }
+
         guard let sessionId = args?["session_id"]?.stringValue else {
             return .fail("Missing required: session_id")
         }

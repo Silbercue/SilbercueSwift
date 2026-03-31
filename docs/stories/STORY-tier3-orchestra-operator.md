@@ -1,8 +1,8 @@
-# Story: Tier 3 — Orchestra/Operator-Architektur
+# Story: Tier 3 — Operator (Autonome Plan-Ausfuehrung)
 
 **Quelle:** STORY-llm-interaction-optimization.md, Tier 3
 **Prioritaet:** High — reduziert Round-Trips um ~85%, LLM-Wartezeit von 15min auf ~1min
-**Aufwand:** ~14-16h gesamt (run_plan 10h + Haiku Operator 4-6h)
+**Aufwand:** ~14-16h gesamt (Operator 10h + Adaptive Intelligence 4-6h)
 **Tier:** Pro
 **Voraussetzungen:** Tier 1 Items 1+2 (Frame in find_element, element_id in Gesten) — bereits erledigt
 
@@ -21,7 +21,7 @@ Das LLM ist der Flaschenhals, nicht die Tools.
 | **LLM-Anteil an Gesamtzeit** | **99%** |
 
 Tier 1+2 reduzieren die Anzahl der Round-Trips (70 → 35). Aber jeder Trip
-geht durch das langsame Orchestrator-LLM. `run_plan` eliminiert den LLM
+geht durch das langsame Orchestrator-LLM. Der Operator (`run_plan`) eliminiert den LLM
 aus der Ausfuehrungsschleife komplett.
 
 ---
@@ -37,14 +37,14 @@ aus der Ausfuehrungsschleife komplett.
                    │ run_plan({ steps: [...] })
                    ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  PlanExecutor  (im MCP-Server, deterministisch)             │
+│  OPERATOR  (PlanExecutor im MCP-Server, deterministisch)    │
 │  Parst JSON → fuehrt Steps sequentiell aus → Report         │
 │  Nutzt WDAClient + ActionScreenshot direkt (kein MCP-Loop)  │
 │  ~500ms fuer 6-Step-Plan statt ~25s via Orchestrator        │
 │                                                             │
 │  Bei Fehler + operator_model gesetzt:                       │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │  HAIKU  (Operator — Anthropic API, optional)           │ │
+│  │  HAIKU  (Adaptive Intelligence — Anthropic API, opt.)  │ │
 │  │  Bekommt: Screenshot + Kontext + Frage                 │ │
 │  │  Liefert: Entscheidung (accept/dismiss/skip/abort)     │ │
 │  │  200-500ms pro Entscheidung                            │ │
@@ -59,7 +59,7 @@ aus der Ausfuehrungsschleife komplett.
 
 ---
 
-## Komponente 1: run_plan Tool
+## Komponente 1: Operator (run_plan Tool)
 
 ### Tool-Schema
 
@@ -86,7 +86,7 @@ aus der Ausfuehrungsschleife komplett.
       },
       "operator_model": {
         "type": "string",
-        "description": "LLM model for adaptive steps (e.g. 'haiku'). Requires ANTHROPIC_API_KEY env var. Omit for pure deterministic execution."
+        "description": "LLM model for Adaptive Intelligence steps (e.g. 'haiku'). Requires ANTHROPIC_API_KEY env var. Omit for pure deterministic execution."
       }
     },
     "required": ["steps"]
@@ -185,7 +185,7 @@ Label dient als Beschriftung im Report.
 Einfache bedingte Ausfuehrung. Kein Nesting tiefer als 1 Ebene — das ist ein
 Plan-Executor, keine Programmiersprache. Komplexe Logik gehoert ins Orchestrator-LLM.
 
-#### Adaptiv (erfordert Operator)
+#### Adaptive Steps (erfordert Adaptive Intelligence)
 
 ```json
 {"judge": {"screenshot": true, "question": "Is the settings page fully loaded?"}}
@@ -193,7 +193,7 @@ Plan-Executor, keine Programmiersprache. Komplexe Logik gehoert ins Orchestrator
 ```
 
 Diese Steps werden nur ausgefuehrt wenn `operator_model` gesetzt ist.
-Ohne Operator: `judge` wird zu SKIP (Warning im Report), `handle_unexpected` wird ignoriert.
+Ohne Adaptive Intelligence: `judge` wird zu SKIP (Warning im Report), `handle_unexpected` wird ignoriert.
 
 ---
 
@@ -208,7 +208,7 @@ PlanExecutor (actor)
 ├── StepRunner          — Fuehrt einzelnen Step aus, nutzt WDAClient direkt
 ├── VerifyEngine        — Prueft Assertions gegen WDA-Zustand
 ├── ReportBuilder       — Sammelt Step-Ergebnisse, generiert kompakten Report
-└── OperatorBridge?     — Optional: Haiku-API-Client fuer adaptive Steps
+└── OperatorBridge?     — Optional: Haiku-API-Client fuer Adaptive Intelligence Steps
 ```
 
 ### Dateistruktur (im Pro-Modul)
@@ -223,7 +223,7 @@ Sources/SilbercueSwiftPro/
 │   ├── StepRunner.swift         — Fuehrt Steps via WDAClient aus
 │   ├── VerifyEngine.swift       — Assertion-Logik
 │   ├── ReportBuilder.swift      — Ergebnis-Aggregation
-│   └── OperatorBridge.swift     — Haiku-API-Client (optional)
+│   └── OperatorBridge.swift     — Adaptive Intelligence: Haiku-API-Client (optional)
 ├── Tools/
 │   ├── RunPlanTool.swift        — MCP Tool-Definition + Handler
 │   └── ... (bestehende Pro-Tools)
@@ -537,17 +537,17 @@ func buildMCPResponse(_ result: PlanResult) -> CallTool.Result {
 
 ---
 
-## Komponente 6: OperatorBridge (Haiku)
+## Komponente 6: Adaptive Intelligence (OperatorBridge / Haiku)
 
-### Wann der Operator einspringt
+### Wann die Adaptive Intelligence einspringt
 
-Der Operator ist **nicht** im Haupt-Ausfuehrungspfad. Er wird nur aufgerufen bei:
+Die Adaptive Intelligence ist **nicht** im Haupt-Ausfuehrungspfad. Sie wird nur aufgerufen bei:
 
 1. **`judge`-Step**: Explizit im Plan angeforderte visuelle/semantische Beurteilung
 2. **`handle_unexpected`-Step**: Reaktion auf unerwarteten Zustand
 3. **Optionaler Fallback**: Wenn `on_error: "escalate"` gesetzt und ein Step fehlschlaegt
 
-Ohne `operator_model` im Plan: Alle adaptiven Steps werden SKIP mit Warning.
+Ohne `operator_model` im Plan: Alle Adaptive Steps werden SKIP mit Warning.
 
 ### API-Integration
 
@@ -562,7 +562,7 @@ actor OperatorBridge {
         let reasoning: String    // Einzeiler fuer Report
     }
 
-    /// Frage den Operator mit Screenshot + Kontext
+    /// Frage die Adaptive Intelligence mit Screenshot + Kontext
     func ask(
         question: String,
         screenshot: Data?,      // JPEG, compact quality
@@ -624,21 +624,21 @@ actor OperatorBridge {
 ```
 Prioritaet:
 1. Env ANTHROPIC_API_KEY (gesetzt vom User oder Claude Code)
-2. Env SILBERCUESWIFT_OPERATOR_KEY (dedizierter Key fuer Operator)
+2. Env SILBERCUESWIFT_OPERATOR_KEY (dedizierter Key fuer Adaptive Intelligence)
 3. Nicht gesetzt → operator_model wird ignoriert, Warning im Report
 ```
 
 Kein Key im Code, kein Key in Config-Dateien. Nur Environment.
 
-### Kosten-Kontrolle
+### Kosten-Kontrolle (Adaptive Intelligence)
 
 Haiku-Vision-Call mit kompaktem Screenshot (~50KB): ~0.001$ pro Call.
-Bei 3-5 Operator-Calls pro Plan: ~0.005$ pro Plan-Ausfuehrung.
+Bei 3-5 Adaptive Intelligence Calls pro Plan: ~0.005$ pro Plan-Ausfuehrung.
 Das ist vernachlaessigbar gegenueber den Opus-Calls die eingespart werden
 (ein Opus-Call mit Screenshot: ~0.05-0.10$).
 
 **Budget-Limit:** Optionaler `operator_budget` Parameter im Plan.
-Default: max 10 Operator-Calls pro Plan. Danach: `abort_with_screenshot`.
+Default: max 10 Adaptive Intelligence Calls pro Plan. Danach: `abort_with_screenshot`.
 
 ---
 
@@ -713,7 +713,7 @@ Default: max 10 Operator-Calls pro Plan. Danach: `abort_with_screenshot`.
 **Vorher:** 5 Screens × (find + click + screenshot + navigate_back) = ~20 Calls, ~60s
 **Nachher:** 1 Call, ~4s Ausfuehrung
 
-### Szenario 3: Alert-Handling mit Operator (adaptiv)
+### Szenario 3: Alert-Handling mit Adaptive Intelligence (adaptiv)
 
 ```json
 {
@@ -736,7 +736,7 @@ Default: max 10 Operator-Calls pro Plan. Danach: `abort_with_screenshot`.
   3. wait 500ms
   4. handle_unexpected
      → Check: Alert visible? → JA, Text: "Are you sure? This cannot be undone."
-     → Operator (Haiku): screenshot + question
+     → Adaptive Intelligence (Haiku): screenshot + question
      → Haiku: {"action": "accept", "reasoning": "Confirmation dialog, user wants deletion"}
      → accept_alert → OK (180ms + 450ms Haiku)
   5. verify screen_contains ["Account Deleted"] → PASS
@@ -849,9 +849,9 @@ Report-Generator und Tool-Registration.
 - [ ] run_plan in ToolRegistry registriert (Pro-Tier)
 - [ ] Tool-Schema korrekt, Claude Code erkennt das Tool
 
-### Phase 5: OperatorBridge / Haiku (Pro, 4-6h)
+### Phase 5: Adaptive Intelligence / OperatorBridge (Pro, 4-6h)
 
-Optionale LLM-Integration fuer adaptive Steps.
+Optionale LLM-Integration fuer Adaptive Steps.
 
 **Akzeptanzkriterien Phase 5:**
 - [ ] OperatorBridge.ask() sendet Haiku-Request via Anthropic API
@@ -859,7 +859,7 @@ Optionale LLM-Integration fuer adaptive Steps.
 - [ ] Timeout: 5s, danach Fallback zu abort_with_screenshot
 - [ ] judge-Step: Screenshot + Frage → Haiku → Decision
 - [ ] handle_unexpected: Alert-Check → Haiku wenn Alert sichtbar
-- [ ] Budget-Limit: max N Operator-Calls pro Plan
+- [ ] Budget-Limit: max N Adaptive Intelligence Calls pro Plan
 - [ ] Ohne API-Key: Adaptive Steps werden SKIP mit Warning
 - [ ] Ohne operator_model: Adaptive Steps werden SKIP (kein Warning)
 
@@ -887,18 +887,18 @@ ist element-3 nicht mehr gueltig.
 Variablen-Arithmetik. Komplexe Logik gehoert ins Orchestrator-LLM. Der Plan
 ist ein Ausfuehrungs-Rezept, keine Programmiersprache.
 
-### Risiko 4: Haiku-Operator verzoegert Ausfuehrung
+### Risiko 4: Adaptive Intelligence verzoegert Ausfuehrung
 
 **Problem:** 500ms pro Haiku-Call addiert sich bei vielen adaptiven Steps.
 **Mitigation:** Budget-Limit (default 10). Deterministische Steps sind immer
-schneller. Operator nur fuer echte Entscheidungen, nie fuer routinemaessige
+schneller. Adaptive Intelligence nur fuer echte Entscheidungen, nie fuer routinemaessige
 Verifikation.
 
 ### Risiko 5: API-Key-Sicherheit
 
 **Problem:** API-Key liegt im Environment, MCP-Server hat Zugang.
 **Mitigation:** Key wird nur fuer Haiku-Calls genutzt, nie geloggt, nie in
-Reports ausgegeben. Operator-Feature ist opt-in (kein Key = kein Operator).
+Reports ausgegeben. Adaptive Intelligence ist opt-in (kein Key = keine Adaptive Steps).
 
 ---
 
@@ -907,8 +907,8 @@ Reports ausgegeben. Operator-Feature ist opt-in (kein Key = kein Operator).
 ### Differenzierung
 
 Kein anderer iOS MCP-Server hat:
-- Einen eingebauten Plan-Executor fuer batch UI-Automation
-- LLM-in-the-Loop Fehlerbehandlung (Haiku als Operator)
+- Einen eingebauten Operator fuer batch UI-Automation
+- LLM-in-the-Loop Fehlerbehandlung (Adaptive Intelligence via Haiku)
 - Deterministische Ausfuehrung mit ~500ms statt ~25s pro Testsequenz
 
 ### Positionierung
@@ -917,7 +917,7 @@ Kein anderer iOS MCP-Server hat:
          Geschwindigkeit
               ▲
               │
-  run_plan ●  │                    ← 500ms/Sequenz, 0 LLM-Overhead
+  Operator ●  │                    ← 500ms/Sequenz, 0 LLM-Overhead
               │
               │
               │          ● Tier 1+2 Optimierungen
@@ -926,26 +926,26 @@ Kein anderer iOS MCP-Server hat:
               │                    ● Andere MCP-Server (jeder Step = LLM Round-Trip)
               │
               └──────────────────────────────────────────► Intelligenz
-                  deterministisch    einfache         strategische
-                  (kein LLM)         Entscheidungen   Planung
-                                     (Haiku)          (Opus)
+                  deterministisch    Adaptive         strategische
+                  (Operator)         Intelligence     Planung
+                                     (Haiku)          (Orchestrator)
 ```
 
 ### Monetarisierung
 
-`run_plan` ist ein klarer Pro-Feature:
+Der Operator ist ein klarer Pro-Feature:
 - Free-User: Einzelne Tools (find, click, screenshot) — funktioniert, aber langsam
-- Pro-User: run_plan fuer batch-Ausfuehrung — 50x schneller, zuverlaessiger
-- Pro-User + API-Key: run_plan + Haiku Operator — adaptiv, intelligent
+- Pro-User: Operator (`run_plan`) fuer batch-Ausfuehrung — 50x schneller, zuverlaessiger
+- Pro-User + API-Key: Operator + Adaptive Intelligence — adaptiv, intelligent
 
-Der Sprung von "10 einzelne Calls" zu "1 run_plan Call" ist so gross, dass er
+Der Sprung von "10 einzelne Calls" zu "1 Operator Call" ist so gross, dass er
 allein den Pro-Preis rechtfertigt.
 
 ---
 
 ## Metriken fuer Erfolg
 
-| Metrik | Heute | Nach run_plan | Ziel |
+| Metrik | Heute | Nach Operator | Ziel |
 |--------|-------|--------------|------|
 | Round-Trips pro E2E-Session | ~70 | ~8-12 | <15 |
 | LLM-Wartezeit pro Session | ~15min | ~1min | <2min |
@@ -972,8 +972,8 @@ Phase 2: PlanParser (Pro)
 Phase 3: PlanExecutor (Pro)           ← Kern-Deliverable
         │
         ▼
-Phase 4: Report + MCP (Pro)           ← nutzbar ab hier
+Phase 4: Report + MCP (Pro)           ← Operator nutzbar ab hier
         │
         ▼
-Phase 5: OperatorBridge (Pro)         ← optional, eigenstaendiges Add-on
+Phase 5: Adaptive Intelligence (Pro)  ← optional, eigenstaendiges Add-on
 ```
