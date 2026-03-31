@@ -107,6 +107,14 @@ claude mcp add --scope user SilbercueSwift /opt/homebrew/bin/SilbercueSwift
 
 > **Note:** Use the full path (`/opt/homebrew/bin/SilbercueSwift`). Claude Code starts MCP servers without a full shell PATH, so bare command names won't be found.
 
+### Uninstall
+
+```bash
+claude mcp remove --scope user SilbercueSwift
+brew uninstall silbercueswift
+brew untap silbercue/silbercue
+```
+
 ## Free vs Pro
 
 SilbercueSwift ships 42 tools for free — build, test, simulate, automate UI, capture logs, and take screenshots. No time limit, no signup.
