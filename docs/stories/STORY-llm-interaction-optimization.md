@@ -538,7 +538,7 @@ total statt 3x15ms = 45ms sequentiell.
 
 ---
 
-# Tier 3 — High Hanging Fruit: Orchestra/Operator-Architektur
+# Tier 3 — High Hanging Fruit: Operator-Architektur
 
 Das fundamentale Problem hinter allen Tier-1/2-Optimierungen: **Das LLM ist der
 Flaschenhals, nicht die Tools.**
@@ -553,7 +553,7 @@ Tier 1+2 reduzieren die *Anzahl* der Round-Trips. Aber jeder verbleibende Trip
 geht durch das langsame Orchestrator-LLM (Opus/Sonnet). Das ist wie eine Autobahn
 optimieren wenn das eigentliche Problem die Ampeln sind.
 
-## Die Idee: Drei Geschwindigkeitsstufen
+## Die Idee: Operator mit drei Geschwindigkeitsstufen
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -565,10 +565,10 @@ optimieren wenn das eigentliche Problem die Ampeln sind.
                │ Delegiert strukturierte Auftraege
                ▼
 ┌─────────────────────────────────────────────────────┐
-│  HAIKU  (Operator)            [Optional]            │
-│  "Counter zeigt 0, Zone ist bei y=403, tippe dort"  │
-│  Trifft einfache Entscheidungen, reagiert auf Fehler│
-│  Geschwindigkeit: 200-500ms pro Entscheidung        │
+│  OPERATOR  (run_plan)                               │
+│  Deterministisch + optional adaptiv (Haiku)         │
+│  Fuehrt Plaene autonom aus, reagiert auf Fehler     │
+│  Geschwindigkeit: 10-500ms pro Step                 │
 └──────────────┬──────────────────────────────────────┘
                │ Fuehrt Tool-Calls aus
                ▼
@@ -589,11 +589,11 @@ Feste Sequenzen die immer gleich ablaufen:
 - "Tippe auf Element Y und verifiziere Label Z" → find + action + find + check
 - "Mache Screenshots in 3 Dynamic Type Groessen" → loop(set_size + relaunch + screenshot)
 
-Diese Sequenzen koennen als **strukturierte Plaene** an den MCP-Server geschickt
-werden. Der Server fuehrt sie intern aus — null LLM-Overhead, null Round-Trips.
+Diese Sequenzen koennen als **strukturierte Plaene** an den Operator geschickt
+werden. Der Operator fuehrt sie intern aus — null LLM-Overhead, null Round-Trips.
 Das ist de facto was accessibility_check und localization_check intern bereits tun.
 
-### Kategorie B: Einfache Entscheidungen (Haiku)
+### Kategorie B: Adaptive Steps (Haiku)
 
 Reaktion auf unerwartete Zustaende:
 - "Ein Alert ist erschienen — was tun?" → Haiku liest Text, entscheidet accept/dismiss
@@ -612,7 +612,7 @@ Nur der Orchestrator braucht das grosse Modell:
 
 ---
 
-## Konkreter Vorschlag: run_plan Tool
+## Konkreter Vorschlag: Operator (`run_plan` Tool)
 
 ### Wie es heute funktioniert (E2E double_tap Test):
 
@@ -632,7 +632,7 @@ Opus: "Zaehler ist jetzt 1. PASS."          [3s denken]
 **10 Round-Trips, ~25 Sekunden LLM-Denkzeit, ~550ms Tool-Zeit.**
 Das LLM macht 98% nichts ausser warten und triviale Entscheidungen treffen.
 
-### Wie es mit run_plan funktionieren koennte:
+### Wie es mit dem Operator funktionieren koennte:
 
 ```
 Opus: run_plan({                             [3s denken, 1 Call]
@@ -646,7 +646,7 @@ Opus: run_plan({                             [3s denken, 1 Call]
   ]
 })
 
-MCP-Server fuehrt intern aus:                [~500ms total, 0 LLM-Overhead]
+Operator fuehrt intern aus:                   [~500ms total, 0 LLM-Overhead]
   ✓ find("Button & Tap Tests") + click → 80ms
   ✓ settle 300ms
   ✓ find("Tap Me") → found, find("Double Tap Zone") → found
@@ -663,7 +663,7 @@ MCP-Server fuehrt intern aus:                [~500ms total, 0 LLM-Overhead]
 ```
 
 **1 Round-Trip, ~3 Sekunden LLM-Denkzeit, ~500ms Tool-Zeit.**
-50x schneller. Und stabiler, weil der MCP-Server die Koordinaten intern berechnet.
+50x schneller. Und stabiler, weil der Operator die Koordinaten intern berechnet.
 
 ### Plan-Syntax (Entwurf)
 
@@ -701,17 +701,17 @@ Regeln:
 - Screenshots werden nur gemacht wenn explizit angefordert (spart Context)
 - Jeder Step hat ein internes Timeout (default 5s)
 
-### Wann braucht man Haiku als Operator?
+### Wann braucht der Operator Adaptive Steps?
 
-Der deterministische run_plan deckt ~80% der Faelle ab. Fuer die restlichen 20%
-braucht man ein schnelles LLM:
+Der deterministische Operator deckt ~80% der Faelle ab. Fuer die restlichen 20%
+braucht man Adaptive Steps — ein schnelles LLM (Haiku) das bei Bedarf einspringt:
 
 1. **Visuelle Beurteilung:** "Sieht dieses Layout kaputt aus?" → Haiku mit Vision
 2. **Adaptive Reaktion:** "Element nicht gefunden nach Scroll — anderer Approach?"
 3. **Unstrukturierte Verifikation:** "Ist die Fehlermeldung sinnvoll?"
 
-Hierfuer koennte ein `run_plan_adaptive` Tool existieren, das intern Haiku aufruft
-wenn ein Step fehlschlaegt oder eine visuelle Beurteilung noetig ist:
+Hierfuer unterstuetzt `run_plan(...)` adaptive Step-Typen (`judge`, `handle_unexpected`),
+die intern Haiku aufrufen wenn eine Beurteilung noetig ist:
 
 ```json
 {
@@ -726,14 +726,14 @@ wenn ein Step fehlschlaegt oder eine visuelle Beurteilung noetig ist:
 }
 ```
 
-Haiku wuerde als Entscheider einspringen — nur wenn noetig, nicht fuer jeden Step.
+Adaptive Steps springen als Entscheider ein — nur wenn noetig, nicht fuer jeden Step.
 
 ### Architektur-Ueberlegungen
 
-**API-Key-Thema:** Der MCP-Server braeuchte Zugang zu einer LLM-API fuer den
-Operator. Optionen:
+**API-Key-Thema:** Der Operator braeuchte Zugang zu einer LLM-API fuer
+Adaptive Steps. Optionen:
 - Env-Var `ANTHROPIC_API_KEY` (der Nutzer stellt bereit)
-- Kein Operator-LLM → reiner deterministischer run_plan (immer noch 50x schneller)
+- Kein Adaptive-Steps-LLM → reiner deterministischer Operator (immer noch 50x schneller)
 - Lokales Small Model (llama.cpp, MLX) → kein API-Key noetig, ~100ms Latenz
 
 **Fehlerbehandlung:** Wenn ein Plan-Step fehlschlaegt:
@@ -741,8 +741,8 @@ Operator. Optionen:
 - `continue`: Naechster Step, Fehler wird im Report notiert
 - `retry(3)`: Bis zu 3 Versuche mit kurzer Pause
 
-**Rueckgabe an Orchestrator:** Der Report muss kompakt sein. Nicht jeden Step
-einzeln melden, sondern:
+**Rueckgabe an Orchestrator:** Der Operator-Report muss kompakt sein. Nicht jeden
+Step einzeln melden, sondern:
 - Zusammenfassung: "6/6 passed" oder "4/6 passed, 2 failed"
 - Nur bei Fehlern: Details + Screenshot
 - Nur bei explizitem `screenshot`-Step: Bild zurueckgeben
@@ -755,14 +755,14 @@ einzeln melden, sondern:
 |----------|--------------------------|---------------|-----------|
 | Heute (Opus direkt) | ~70 | ~5-15 Minuten | ~4 Sekunden |
 | Tier 1+2 Optimierungen | ~35 | ~3-8 Minuten | ~3 Sekunden |
-| run_plan (deterministisch) | ~8-12 | ~30-60 Sekunden | ~4 Sekunden |
-| run_plan + Haiku Operator | ~5-8 | ~20-40 Sekunden | ~5 Sekunden |
+| Operator (deterministisch) | ~8-12 | ~30-60 Sekunden | ~4 Sekunden |
+| Operator + Adaptive Steps | ~5-8 | ~20-40 Sekunden | ~5 Sekunden |
 
-**Der Sprung von Tier 2 zu run_plan ist groesser als von Heute zu Tier 2.**
+**Der Sprung von Tier 2 zum Operator ist groesser als von Heute zu Tier 2.**
 
-run_plan allein (ohne Haiku) wuerde die E2E-Session von ~15 Minuten LLM-Wartezeit
-auf ~1 Minute reduzieren. Der Orchestrator schreibt 5-8 Plaene, der MCP-Server
-fuehrt jeden in <1 Sekunde aus.
+Der Operator allein (ohne Adaptive Steps) wuerde die E2E-Session von ~15 Minuten
+LLM-Wartezeit auf ~1 Minute reduzieren. Der Orchestrator schreibt 5-8 Plaene,
+der Operator fuehrt jeden in <1 Sekunde aus.
 
 ---
 
@@ -775,13 +775,13 @@ fuehrt jeden in <1 Sekunde aus.
 | Variable-System ($target) | 1h | Step-Executor |
 | Verify-Engine | 2h | Step-Executor |
 | Report-Generator | 1h | Step-Executor |
-| **Summe run_plan** | **~10h** | Tier 1 als Voraussetzung |
-| Haiku-Operator Integration | 4-6h | run_plan + API-Key-Handling |
+| **Summe Operator (`run_plan`)** | **~10h** | Tier 1 als Voraussetzung |
+| Adaptive Steps (judge/handle) | 4-6h | Operator + API-Key-Handling |
 
-Tier 1 (2-3h) → run_plan (10h) → Haiku-Operator (4-6h)
+Tier 1 (2-3h) → Operator (10h) → Adaptive Steps (4-6h)
 
-Der deterministische run_plan ist der groesste Hebel und braucht kein externes LLM.
-Der Haiku-Operator ist ein optionales Add-on fuer die 20% adaptiven Faelle.
+Der deterministische Operator ist der groesste Hebel und braucht kein externes LLM.
+Adaptive Steps sind ein optionales Add-on fuer die 20% Faelle die Urteilsvermoegen brauchen.
 
 ---
 
@@ -812,8 +812,8 @@ Der Haiku-Operator ist ein optionales Add-on fuer die 20% adaptiven Faelle.
 
 | # | Aenderung | Aufwand | Round-Trips gespart | Empfehlung |
 |---|-----------|---------|---------------------|------------|
-| 12 | run_plan (deterministisch) | 10h | **~55-60 pro Session** | Nach Tier 1 |
-| 13 | Haiku Operator (adaptiv) | 4-6h | weitere ~5-10 | Nach run_plan |
+| 12 | Operator (run_plan) | 10h | **~55-60 pro Session** | Nach Tier 1 |
+| 13 | Adaptive Steps (judge/handle) | 4-6h | weitere ~5-10 | Nach Operator |
 
 ## Empfohlene Implementierungsreihenfolge
 
@@ -825,14 +825,14 @@ Der Haiku-Operator ist ein optionales Add-on fuer die 20% adaptiven Faelle.
 → App-Starts werden nahtlos, Navigation wird ein One-Liner, get_source wird nuetzlich.
 → Geschaetzte Reduktion: **weitere 15-25 Calls** pro Session.
 
-**Sprint 3 (Vision, ~10h):** Item 12 (run_plan)
-→ Game-Changer. Opus schreibt 5-8 Plaene, MCP-Server fuehrt jeden in <1s aus.
+**Sprint 3 (Vision, ~10h):** Item 12 (Operator)
+→ Game-Changer. Opus schreibt 5-8 Plaene, der Operator fuehrt jeden in <1s aus.
 → Geschaetzte Reduktion: **70 Round-Trips → 8-12**, LLM-Wartezeit **15min → 1min**.
 → Voraussetzung: Tier 1 Items 1+2 (Frame + element_id).
 
-**Sprint 4 (Optional, ~5h):** Item 13 (Haiku Operator)
+**Sprint 4 (Optional, ~5h):** Item 13 (Adaptive Steps)
 → Fuer die 20% Faelle die Urteilsvermoegen brauchen (visuelle Checks, Fehlerreaktion).
-→ Voraussetzung: run_plan + ANTHROPIC_API_KEY.
+→ Voraussetzung: Operator + ANTHROPIC_API_KEY.
 
 **Backlog:** Items 5 + 10 + 11
 → Nice-to-have, nicht kritisch.
