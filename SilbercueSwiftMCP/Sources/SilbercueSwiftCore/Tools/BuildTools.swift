@@ -137,7 +137,8 @@ enum BuildTools {
                     await SessionState.shared.setBuildInfo(bundleId: bid, appPath: buildInfo.appPath)
                 }
 
-                var output = "Build succeeded in \(elapsed)s\nScheme: \(scheme)\nSimulator: \(simulator)"
+                let simLabel = await SimTools.displayName(for: simulator)
+                var output = "Build succeeded in \(elapsed)s\nScheme: \(scheme)\nSimulator: \(simLabel)"
                 if let bid = buildInfo.bundleId {
                     output += "\nBundle ID: \(bid)"
                 }
@@ -404,7 +405,8 @@ enum BuildTools {
         let totalElapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - totalStart)
 
         var output = "build_run_sim completed in \(totalElapsed)s"
-        output += "\nScheme: \(scheme) | Simulator: \(simulator)"
+        let simLabel = await SimTools.displayName(for: udid)
+        output += "\nScheme: \(scheme) | Simulator: \(simLabel)"
         output += "\nBundle ID: \(bundleId)"
         output += "\nApp path: \(finalAppPath)"
         output += "\n"
@@ -414,6 +416,16 @@ enum BuildTools {
         output += "\n  Install:   \(installElapsed)s"
         output += "\n  Launch:    OK"
         output += "\n  Simulator: opened"
+
+        // Auto-WDA session: if WDA is running, create/update session for the launched app
+        if await WDAClient.shared.isHealthy() {
+            do {
+                let sessionId = try await WDAClient.shared.createSession(bundleId: bundleId)
+                output += "\n  WDA:       session \(sessionId)"
+            } catch {
+                output += "\n  WDA:       session failed — use wda_create_session manually"
+            }
+        }
 
         return .ok(output)
     }

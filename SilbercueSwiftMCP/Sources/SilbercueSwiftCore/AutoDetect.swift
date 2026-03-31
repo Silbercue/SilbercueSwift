@@ -46,11 +46,12 @@ public enum AutoDetect {
         case 1:
             return booted[0].udid
         default:
-            var lines = ["\(booted.count) simulators booted — specify which one:"]
-            for sim in booted {
-                lines.append("  \(sim.name) (\(sim.runtime)) — \(sim.udid)")
-            }
-            throw SmartContextError(lines.joined(separator: "\n"))
+            // Multiple booted — pick newest runtime (deterministic)
+            let sorted = booted.sorted { $0.runtime.localizedStandardCompare($1.runtime) == .orderedDescending }
+            let picked = sorted[0]
+            let others = sorted.dropFirst().map { "\($0.name) (\($0.runtime))" }.joined(separator: ", ")
+            Log.warn("Auto-picked \(picked.name) (\(picked.runtime)) from \(booted.count) booted sims (skipped: \(others))")
+            return picked.udid
         }
     }
 

@@ -195,7 +195,6 @@ enum SimTools {
         if uuidPattern.firstMatch(in: nameOrUDID, range: NSRange(nameOrUDID.startIndex..., in: nameOrUDID)) != nil {
             return nameOrUDID
         }
-        if nameOrUDID == "booted" { return "booted" }
 
         let result = try await Shell.xcrun(timeout: 15, "simctl", "list", "devices", "-j")
         guard let data = result.stdout.data(using: .utf8),
@@ -204,8 +203,6 @@ enum SimTools {
             throw NSError(domain: "SimTools", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse simulator list"])
         }
 
-        // Exact match only — prefix/substring matching causes false positives on destructive ops
-        // (e.g. "iPhone 16 Pro" would match "iPhone 16 Pro Max" with hasPrefix)
         struct SimMatch {
             let udid: String
             let name: String
@@ -214,7 +211,13 @@ enum SimTools {
         }
 
         let needle = nameOrUDID.lowercased()
+        let isBooted = needle == "booted"
         var matches: [SimMatch] = []
+
+        // Short UDID prefix match (4-8 hex chars from sim_status, e.g. "51AC")
+        let isShortUDID = !isBooted && nameOrUDID.count >= 4 && nameOrUDID.count <= 8
+            && nameOrUDID.allSatisfy({ $0.isHexDigit })
+        let udidPrefix = nameOrUDID.uppercased()
 
         for (runtime, devices) in deviceGroups {
             let runtimeName = runtime.split(separator: ".").last.map(String.init) ?? runtime
@@ -222,10 +225,23 @@ enum SimTools {
                 guard let name = device["name"] as? String,
                       let udid = device["udid"] as? String,
                       let state = device["state"] as? String else { continue }
-                if name.lowercased() == needle {
+                if isBooted {
+                    if state == "Booted" {
+                        matches.append(SimMatch(udid: udid, name: name, state: state, runtime: runtimeName))
+                    }
+                } else if isShortUDID {
+                    if udid.uppercased().hasPrefix(udidPrefix) {
+                        matches.append(SimMatch(udid: udid, name: name, state: state, runtime: runtimeName))
+                    }
+                } else if name.lowercased() == needle {
                     matches.append(SimMatch(udid: udid, name: name, state: state, runtime: runtimeName))
                 }
             }
+        }
+
+        // "booted" with no booted sims
+        if isBooted && matches.isEmpty {
+            throw NSError(domain: "SimTools", code: 2, userInfo: [NSLocalizedDescriptionKey: "No booted simulator found. Boot one with boot_sim."])
         }
 
         guard !matches.isEmpty else {
@@ -255,6 +271,23 @@ enum SimTools {
         }
 
         return sorted[0].udid
+    }
+
+    /// Look up a short display label for a UDID, e.g. "51AC (iPhone 16 Pro, iOS-26-4)".
+    /// Returns the raw UDID string unchanged if lookup fails — never throws.
+    static func displayName(for udid: String) async -> String {
+        guard let data = (try? await Shell.xcrun(timeout: 5, "simctl", "list", "devices", "-j"))?.stdout.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let groups = json["devices"] as? [String: [[String: Any]]] else { return udid }
+        for (runtime, devices) in groups {
+            let rt = runtime.split(separator: ".").last.map(String.init) ?? runtime
+            for d in devices {
+                if let u = d["udid"] as? String, u == udid, let name = d["name"] as? String {
+                    return "\(udid.prefix(4)) (\(name), \(rt))"
+                }
+            }
+        }
+        return udid
     }
 
     // MARK: - Implementations
@@ -383,7 +416,19 @@ enum SimTools {
             if result.succeeded {
                 Task { await SimStateCache.shared.recordAppLaunch(udid: udid, bundleId: bundleId) }
                 let note = wasRunning ? " (was running, relaunched)" : ""
-                return .ok("Launched \(bundleId) on \(udid)\(note)\n\(result.stdout)")
+                var output = "Launched \(bundleId) on \(udid)\(note)\n\(result.stdout)"
+
+                // Auto-WDA session: if WDA is running, create/update session for the launched app
+                if await WDAClient.shared.isHealthy() {
+                    do {
+                        let sessionId = try await WDAClient.shared.createSession(bundleId: bundleId)
+                        output += "\nWDA session: \(sessionId)"
+                    } catch {
+                        output += "\nWDA session failed: \(error) — use wda_create_session manually"
+                    }
+                }
+
+                return .ok(output)
             }
 
             if result.exitCode == -1 {

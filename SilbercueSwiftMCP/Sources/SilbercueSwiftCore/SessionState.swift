@@ -50,14 +50,20 @@ public actor SessionState {
         return detected
     }
 
-    /// Resolve simulator. NOT cached — booted state can change between calls.
+    /// Resolve simulator to a full UDID. Handles names, short UDIDs, "booted", and auto-detect.
+    /// All tools MUST use this to ensure consistent simulator selection.
     public func resolveSimulator(_ explicit: String?) async throws -> String {
+        let raw: String
         if let explicit {
             trackUsage(value: explicit, streak: &simulatorStreak, stored: &simulator)
-            return explicit
+            raw = explicit
+        } else if let stored = simulator {
+            raw = stored
+        } else {
+            return try await AutoDetect.simulator()
         }
-        if let stored = simulator { return stored }
-        return try await AutoDetect.simulator()
+        // Full UDID or "booted" → pass through (SimTools.resolveSimulator handles both)
+        return try await SimTools.resolveSimulator(raw)
     }
 
     // MARK: - Build info (populated after successful build_sim)
