@@ -23,7 +23,8 @@ scripts/
 !SilbercueSwiftMCP/scripts/build-combined.sh
 SwiftMCPTestHarness/
 SilbercueTestHarness/
-SilbercueWDA/
+SilbercueWDA/build/
+SilbercueWDA/scripts/
 visual-baselines/
 autoresearch-results.tsv
 CLAUDE.md
@@ -35,3 +36,4 @@ BUGREPORT-*.md
 DIRECTORY-SUBMISSIONS.md
 iOS-ALERTS-RESEARCH-*.md
 prompt.md
+docs/marketing/CREDENTIALS.md
