@@ -259,10 +259,10 @@ public enum UIActions {
         let rawType = node["type"] as? String ?? ""
         let type = rawType.hasPrefix("XCUIElementType") ? String(rawType.dropFirst("XCUIElementType".count)) : rawType
 
-        if type == "Button", let frame = node["frame"] as? [String: Any] {
+        if type == "Button", let rect = node["rect"] as? [String: Any] {
             func intVal(_ key: String) -> Int? {
-                if let v = frame[key] as? Int { return v }
-                if let v = frame[key] as? Double { return Int(v) }
+                if let v = rect[key] as? Int { return v }
+                if let v = rect[key] as? Double { return Int(v) }
                 return nil
             }
             if let x = intVal("x"), let y = intVal("y"), let w = intVal("width"), let h = intVal("height") {
