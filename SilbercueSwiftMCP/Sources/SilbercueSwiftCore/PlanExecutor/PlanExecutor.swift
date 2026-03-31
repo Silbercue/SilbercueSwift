@@ -136,7 +136,7 @@ public final class PlanExecutor {
                 guard let center = await UIActions.findBackButtonCenter() else {
                     return .step(.failed("No back button found"), [])
                 }
-                try await WDAClient.shared.tap(x: Double(center.x), y: Double(center.y))
+                try await UIActions.tap(x: Double(center.x), y: Double(center.y))
                 try await Task.sleep(nanoseconds: 300_000_000)
 
             case .find(let using, let value, let bindAs, let scroll):
@@ -183,7 +183,7 @@ public final class PlanExecutor {
 
             case .swipe(let direction, let element):
                 let (startX, startY, endX, endY) = try await resolveSwipe(direction: direction, element: element)
-                try await WDAClient.shared.swipe(startX: startX, startY: startY, endX: endX, endY: endY)
+                try await UIActions.swipe(fromX: startX, fromY: startY, toX: endX, toY: endY)
 
             case .typeText(let text, let element):
                 let elementId: String?
