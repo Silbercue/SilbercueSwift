@@ -7,30 +7,50 @@ public enum ErrorStrategy: String, Sendable {
     case `continue` = "continue"
 }
 
+/// Outcome of a plan execution — either completed or suspended awaiting a decision.
+public enum PlanOutcome: Sendable {
+    case completed(ReportBuilder.PlanResult)
+    case suspended(SuspendInfo)
+
+    public struct SuspendInfo: Sendable {
+        public let sessionId: String
+        public let question: String
+        public let screenshotBase64: String?
+        public let partialReport: String
+        public let stepsCompleted: Int
+        public let stepsTotal: Int
+    }
+}
+
 public final class PlanExecutor {
     private let variables = VariableStore()
     private let operatorBridge: OperatorBridge?
     private let onError: ErrorStrategy
     private let timeoutMs: UInt64
+    private let startTime: CFAbsoluteTime
+
+    // State for resume
+    private var results: [ReportBuilder.StepResult] = []
+    private var screenshots: [ReportBuilder.LabeledScreenshot] = []
 
     public init(
         operatorBridge: OperatorBridge? = nil,
         onError: ErrorStrategy = .abortWithScreenshot,
-        timeoutMs: UInt64 = 30000
+        timeoutMs: UInt64 = 30000,
+        startTime: CFAbsoluteTime? = nil
     ) {
         self.operatorBridge = operatorBridge
         self.onError = onError
         self.timeoutMs = timeoutMs
+        self.startTime = startTime ?? CFAbsoluteTimeGetCurrent()
     }
 
     // MARK: - Execute Plan
 
-    public func execute(steps: [PlanStep]) async -> ReportBuilder.PlanResult {
-        let startTime = CFAbsoluteTimeGetCurrent()
-        var results: [ReportBuilder.StepResult] = []
-        var screenshots: [ReportBuilder.LabeledScreenshot] = []
+    public func execute(steps: [PlanStep], startAt: Int = 0) async -> PlanOutcome {
+        for (offset, step) in steps.dropFirst(startAt).enumerated() {
+            let index = startAt + offset
 
-        for (index, step) in steps.enumerated() {
             // Timeout check
             let elapsed = UInt64((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
             if elapsed > timeoutMs {
@@ -42,60 +62,79 @@ public final class PlanExecutor {
             }
 
             let stepStart = CFAbsoluteTimeGetCurrent()
-            let (status, stepScreenshots) = await runStep(step, index: index)
+            let outcome = await runStep(step, index: index, allSteps: steps)
             let stepMs = Int((CFAbsoluteTimeGetCurrent() - stepStart) * 1000)
 
-            screenshots.append(contentsOf: stepScreenshots)
-            results.append(ReportBuilder.StepResult(
-                index: index, description: step.description,
-                status: status, elapsedMs: stepMs
-            ))
+            switch outcome {
+            case .step(let status, let stepScreenshots):
+                screenshots.append(contentsOf: stepScreenshots)
+                results.append(ReportBuilder.StepResult(
+                    index: index, description: step.description,
+                    status: status, elapsedMs: stepMs
+                ))
 
-            if case .failed = status {
-                switch onError {
-                case .abort:
-                    break
-                case .abortWithScreenshot:
-                    if let ss = await captureScreenshot(label: "error-at-step-\(index + 1)") {
-                        screenshots.append(ss)
+                if case .failed = status {
+                    switch onError {
+                    case .abort:
+                        break
+                    case .abortWithScreenshot:
+                        if let ss = await captureScreenshot(label: "error-at-step-\(index + 1)") {
+                            screenshots.append(ss)
+                        }
+                    case .continue:
+                        continue
                     }
-                case .continue:
-                    continue
+                    break
                 }
-                break
+
+            case .suspend(let info):
+                // Plan is suspended — save state and return
+                return .suspended(info)
             }
         }
 
-        let totalMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
-        let passCount = results.filter { if case .passed = $0.status { return true }; return false }.count
-        let failCount = results.filter { if case .failed = $0.status { return true }; return false }.count
-        let allPassed = failCount == 0
+        return .completed(buildResult())
+    }
 
-        return ReportBuilder.PlanResult(
-            steps: results,
-            screenshots: screenshots,
-            passed: allPassed,
-            summary: "\(passCount)/\(results.count) passed (\(totalMs)ms)",
-            elapsedMs: totalMs
-        )
+    /// Resume with pre-filled results/screenshots from a suspended session.
+    public func restore(
+        results: [ReportBuilder.StepResult],
+        screenshots: [ReportBuilder.LabeledScreenshot],
+        bindings: [String: UIActions.ElementBinding]
+    ) {
+        self.results = results
+        self.screenshots = screenshots
+        for (name, binding) in bindings {
+            variables.bind(name, binding)
+        }
+    }
+
+    /// Export current variable bindings for session persistence.
+    public func exportBindings() -> [String: UIActions.ElementBinding] {
+        variables.exportAll()
     }
 
     // MARK: - Step Dispatch
 
-    private func runStep(_ step: PlanStep, index: Int) async -> (ReportBuilder.StepStatus, [ReportBuilder.LabeledScreenshot]) {
+    private enum StepOutcome {
+        case step(ReportBuilder.StepStatus, [ReportBuilder.LabeledScreenshot])
+        case suspend(PlanOutcome.SuspendInfo)
+    }
+
+    private func runStep(_ step: PlanStep, index: Int, allSteps: [PlanStep]) async -> StepOutcome {
         do {
-            var screenshots: [ReportBuilder.LabeledScreenshot] = []
+            var stepScreenshots: [ReportBuilder.LabeledScreenshot] = []
 
             switch step {
             case .navigate(let target, let scroll):
                 let result = try await UIActions.navigate(target: target, scroll: scroll)
                 if let ss = result.screenshot, case .image(let data, _, _, _) = ss {
-                    screenshots.append(ReportBuilder.LabeledScreenshot(label: "navigate-\(target)", base64: data))
+                    stepScreenshots.append(ReportBuilder.LabeledScreenshot(label: "navigate-\(target)", base64: data))
                 }
 
             case .navigateBack:
                 guard let center = await UIActions.findBackButtonCenter() else {
-                    return (.failed("No back button found"), [])
+                    return .step(.failed("No back button found"), [])
                 }
                 try await WDAClient.shared.tap(x: Double(center.x), y: Double(center.y))
                 try await Task.sleep(nanoseconds: 300_000_000)
@@ -131,14 +170,14 @@ public final class PlanExecutor {
             case .doubleTap(let target):
                 let binding = try await variables.resolveTarget(target)
                 guard let cx = binding.centerX, let cy = binding.centerY else {
-                    return (.failed("No coordinates for double_tap"), [])
+                    return .step(.failed("No coordinates for double_tap"), [])
                 }
                 try await WDAClient.shared.doubleTap(x: Double(cx), y: Double(cy))
 
             case .longPress(let target, let durationMs):
                 let binding = try await variables.resolveTarget(target)
                 guard let cx = binding.centerX, let cy = binding.centerY else {
-                    return (.failed("No coordinates for long_press"), [])
+                    return .step(.failed("No coordinates for long_press"), [])
                 }
                 try await WDAClient.shared.longPress(x: Double(cx), y: Double(cy), durationMs: durationMs)
 
@@ -157,7 +196,7 @@ public final class PlanExecutor {
 
             case .screenshot(let label, _):
                 if let ss = await captureScreenshot(label: label) {
-                    screenshots.append(ss)
+                    stepScreenshots.append(ss)
                 }
 
             case .wait(let ms):
@@ -169,39 +208,53 @@ public final class PlanExecutor {
             case .verify(let condition):
                 let result = await VerifyEngine.verify(condition)
                 if !result.passed {
-                    return (.failed(result.detail), [])
+                    return .step(.failed(result.detail), [])
                 }
 
             case .ifElementExists(let id, let thenSteps):
                 let exists = (try? await UIActions.find(using: "accessibility id", value: id)) != nil
                 if exists {
                     for (i, subStep) in thenSteps.enumerated() {
-                        let (subStatus, subSS) = await runStep(subStep, index: i)
-                        screenshots.append(contentsOf: subSS)
-                        if case .failed = subStatus {
-                            return (subStatus, screenshots)
+                        let subOutcome = await runStep(subStep, index: i, allSteps: allSteps)
+                        switch subOutcome {
+                        case .step(let subStatus, let subSS):
+                            stepScreenshots.append(contentsOf: subSS)
+                            if case .failed = subStatus {
+                                return .step(subStatus, stepScreenshots)
+                            }
+                        case .suspend(let info):
+                            return .suspend(info)
                         }
                     }
                 }
 
             case .judge(let question, let wantScreenshot):
-                return await handleJudge(question: question, wantScreenshot: wantScreenshot)
+                return await handleJudge(
+                    question: question, wantScreenshot: wantScreenshot,
+                    stepIndex: index, allSteps: allSteps
+                )
 
             case .handleUnexpected(let instruction):
-                return await handleUnexpected(instruction: instruction)
+                return await handleUnexpected(
+                    instruction: instruction,
+                    stepIndex: index, allSteps: allSteps
+                )
             }
 
-            return (.passed, screenshots)
+            return .step(.passed, stepScreenshots)
         } catch {
-            return (.failed("\(error)"), [])
+            return .step(.failed("\(error)"), [])
         }
     }
 
-    // MARK: - Adaptive Steps (Operator)
+    // MARK: - Adaptive Steps (Operator) with 4-Tier Fallback
 
-    private func handleJudge(question: String, wantScreenshot: Bool) async -> (ReportBuilder.StepStatus, [ReportBuilder.LabeledScreenshot]) {
+    private func handleJudge(
+        question: String, wantScreenshot: Bool,
+        stepIndex: Int, allSteps: [PlanStep]
+    ) async -> StepOutcome {
         guard let bridge = operatorBridge else {
-            return (.skipped("No operator configured"), [])
+            return .step(.skipped("No operator configured"), [])  // Tier 4: Skip
         }
 
         var ssBase64: String?
@@ -210,37 +263,50 @@ public final class PlanExecutor {
         }
 
         do {
+            // Tries Tier 1 (Sampling) → Tier 2 (Direct API) → throws PauseForDecision
             let decision = try await bridge.ask(
                 question: question,
                 screenshotBase64: ssBase64,
                 context: "Plan execution — operator judge step"
             )
             if decision.action == "abort" {
-                return (.failed("Operator abort: \(decision.reasoning)"), [])
+                return .step(.failed("Operator abort [operator]: \(decision.reasoning)"), [])
             }
-            return (.passed, [])
-        } catch let error where "\(error)".contains("Method not found") {
-            return (.skipped("Sampling not supported by client"), [])
+            return .step(.passed, [])
+
+        } catch is OperatorBridge.PauseForDecision {
+            // Tier 3: Suspend plan, return control to client
+            return await suspendPlan(
+                question: question,
+                screenshotBase64: ssBase64,
+                context: "judge: \(question)",
+                stepIndex: stepIndex,
+                allSteps: allSteps
+            )
         } catch {
-            return (.failed("Operator error: \(error)"), [])
+            return .step(.failed("Operator error: \(error)"), [])
         }
     }
 
-    private func handleUnexpected(instruction: String) async -> (ReportBuilder.StepStatus, [ReportBuilder.LabeledScreenshot]) {
+    private func handleUnexpected(
+        instruction: String,
+        stepIndex: Int, allSteps: [PlanStep]
+    ) async -> StepOutcome {
         guard let bridge = operatorBridge else {
-            return (.skipped("No operator configured"), [])
+            return .step(.skipped("No operator configured"), [])  // Tier 4: Skip
         }
 
         // Check if an alert is visible
         guard let alertInfo = await WDAClient.shared.getAlertText() else {
-            return (.passed, [])  // No alert → nothing unexpected → pass
+            return .step(.passed, [])  // No alert → nothing unexpected → pass
         }
 
-        // Alert visible — ask operator what to do
         let ss = await captureScreenshot(label: "unexpected-alert")
+        let question = "Alert visible: \"\(alertInfo.text)\" with buttons: \(alertInfo.buttons.joined(separator: ", ")). Instruction: \(instruction)"
+
         do {
             let decision = try await bridge.ask(
-                question: "Alert visible: \"\(alertInfo.text)\" with buttons: \(alertInfo.buttons.joined(separator: ", ")). Instruction: \(instruction)",
+                question: question,
                 screenshotBase64: ss?.base64,
                 context: "Unexpected alert during plan execution"
             )
@@ -248,23 +314,95 @@ public final class PlanExecutor {
             switch decision.action {
             case "accept":
                 _ = try? await WDAClient.shared.acceptAlert()
-                return (.passed, ss.map { [$0] } ?? [])
+                return .step(.passed, ss.map { [$0] } ?? [])
             case "dismiss":
                 _ = try? await WDAClient.shared.dismissAlert()
-                return (.passed, ss.map { [$0] } ?? [])
+                return .step(.passed, ss.map { [$0] } ?? [])
             case "abort":
-                return (.failed("Operator abort on alert: \(decision.reasoning)"), ss.map { [$0] } ?? [])
+                return .step(.failed("Operator abort on alert [operator]: \(decision.reasoning)"), ss.map { [$0] } ?? [])
             default:
-                return (.passed, ss.map { [$0] } ?? [])
+                return .step(.passed, ss.map { [$0] } ?? [])
             }
-        } catch let error where "\(error)".contains("Method not found") {
-            return (.skipped("Sampling not supported by client"), ss.map { [$0] } ?? [])
+
+        } catch is OperatorBridge.PauseForDecision {
+            return await suspendPlan(
+                question: question,
+                screenshotBase64: ss?.base64,
+                context: "handle_unexpected: \(instruction)",
+                stepIndex: stepIndex,
+                allSteps: allSteps
+            )
         } catch {
-            return (.failed("Operator error handling alert: \(error)"), ss.map { [$0] } ?? [])
+            return .step(.failed("Operator error handling alert: \(error)"), ss.map { [$0] } ?? [])
         }
     }
 
+    // MARK: - Tier 3: Suspend Plan
+
+    private func suspendPlan(
+        question: String,
+        screenshotBase64: String?,
+        context: String,
+        stepIndex: Int,
+        allSteps: [PlanStep]
+    ) async -> StepOutcome {
+        let sessionId = UUID().uuidString
+
+        let session = PlanSessionStore.SuspendedPlan(
+            sessionId: sessionId,
+            allSteps: allSteps,
+            pausedAtIndex: stepIndex,
+            pendingDecision: .init(
+                question: question,
+                screenshotBase64: screenshotBase64,
+                context: context
+            ),
+            completedResults: results,
+            collectedScreenshots: screenshots,
+            variableBindings: exportBindings().mapValues { binding in
+                PlanSessionStore.VariableBinding(
+                    elementId: binding.elementId,
+                    centerX: binding.centerX,
+                    centerY: binding.centerY,
+                    label: binding.label
+                )
+            },
+            onError: onError,
+            timeoutMs: timeoutMs,
+            startTime: startTime,
+            operatorBudget: 10,
+            operatorCallsUsed: 0,
+            createdAt: Date()
+        )
+
+        let _ = await PlanSessionStore.shared.store(session)
+
+        let partialReport = ReportBuilder.buildReport(buildResult())
+
+        return .suspend(PlanOutcome.SuspendInfo(
+            sessionId: sessionId,
+            question: question,
+            screenshotBase64: screenshotBase64,
+            partialReport: partialReport,
+            stepsCompleted: results.count,
+            stepsTotal: allSteps.count
+        ))
+    }
+
     // MARK: - Helpers
+
+    private func buildResult() -> ReportBuilder.PlanResult {
+        let totalMs = Int((CFAbsoluteTimeGetCurrent() - startTime) * 1000)
+        let passCount = results.filter { if case .passed = $0.status { return true }; return false }.count
+        let failCount = results.filter { if case .failed = $0.status { return true }; return false }.count
+        return ReportBuilder.PlanResult(
+            steps: results,
+            screenshots: screenshots,
+            passed: failCount == 0,
+            summary: "\(passCount)/\(results.count) passed (\(totalMs)ms)",
+            elapsedMs: totalMs
+        )
+    }
 
     private func captureScreenshot(label: String) async -> ReportBuilder.LabeledScreenshot? {
         guard let img = await ActionScreenshot.capture(),
@@ -291,7 +429,6 @@ public final class PlanExecutor {
     }
 
     private func resolveSwipe(direction: String, element: StepTarget?) async throws -> (Double, Double, Double, Double) {
-        // Default: center of screen, 200px swipe distance
         var cx = 200.0, cy = 400.0
         if let el = element {
             let binding = try await variables.resolveTarget(el)
