@@ -17,10 +17,10 @@ BACKUP="$MCP_DIR/Package.swift.bak"
 # Pro path: argument or default (relative to MCP_DIR)
 PRO_PATH="${1:-../../SilbercueSwiftPro}"
 
-# Convert to absolute if relative
+# Convert to absolute if relative (resolve from caller's working directory)
 if [[ "$PRO_PATH" != /* ]]; then
-    PRO_PATH="$(cd "$MCP_DIR" && cd "$PRO_PATH" 2>/dev/null && pwd)" || {
-        echo "ERROR: Pro repo not found at $1 (resolved from $MCP_DIR)" >&2
+    PRO_PATH="$(cd "$PRO_PATH" 2>/dev/null && pwd)" || {
+        echo "ERROR: Pro repo not found at $1" >&2
         exit 1
     }
 fi
