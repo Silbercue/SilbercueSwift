@@ -400,23 +400,15 @@ enum SimTools {
         do {
             let udid = try await resolveSimulator(sim)
 
-            // Terminate any existing instance first — simctl launch can hang indefinitely
-            // if the app is already running. terminate is fast and idempotent.
-            let termResult = try? await Shell.run("/usr/bin/xcrun",
-                arguments: ["simctl", "terminate", udid, bundleId], timeout: 5)
-            let wasRunning = termResult?.succeeded == true
-            if wasRunning {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s grace period
-            }
-
-            // Launch with hard 15s timeout to prevent hanging
+            // Launch with --terminate-running-process: atomically terminates any
+            // existing instance and starts a new one. Avoids the race condition of
+            // separate terminate + launch where the app may not foreground reliably.
             let result = try await Shell.run("/usr/bin/xcrun",
-                arguments: ["simctl", "launch", udid, bundleId], timeout: 15)
+                arguments: ["simctl", "launch", "--terminate-running-process", udid, bundleId], timeout: 15)
 
             if result.succeeded {
                 Task { await SimStateCache.shared.recordAppLaunch(udid: udid, bundleId: bundleId) }
-                let note = wasRunning ? " (was running, relaunched)" : ""
-                var output = "Launched \(bundleId) on \(udid)\(note)\n\(result.stdout)"
+                var output = "Launched \(bundleId) on \(udid)\n\(result.stdout)"
 
                 // Auto-WDA session: if WDA is running, create/update session for the launched app
                 if await WDAClient.shared.isHealthy() {
