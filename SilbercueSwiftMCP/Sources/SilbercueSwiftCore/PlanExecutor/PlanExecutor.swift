@@ -219,6 +219,8 @@ public final class PlanExecutor {
                 return (.failed("Operator abort: \(decision.reasoning)"), [])
             }
             return (.passed, [])
+        } catch let error where "\(error)".contains("Method not found") {
+            return (.skipped("Sampling not supported by client"), [])
         } catch {
             return (.failed("Operator error: \(error)"), [])
         }
@@ -255,6 +257,8 @@ public final class PlanExecutor {
             default:
                 return (.passed, ss.map { [$0] } ?? [])
             }
+        } catch let error where "\(error)".contains("Method not found") {
+            return (.skipped("Sampling not supported by client"), ss.map { [$0] } ?? [])
         } catch {
             return (.failed("Operator error handling alert: \(error)"), ss.map { [$0] } ?? [])
         }

@@ -3,9 +3,12 @@ import MCP
 
 public enum RunPlanTool {
 
+    /// Set by main.swift after Server creation — enables MCP Sampling for operator.
+    public nonisolated(unsafe) static var server: Server?
+
     public static let tool = Tool(
         name: "run_plan",
-        description: "Execute a structured test plan deterministically. Runs find/click/verify/screenshot steps internally without LLM round-trips. Returns a compact execution report. 50x faster than individual tool calls for sequential UI interactions. Use operator_model for adaptive steps (judge, handle_unexpected).",
+        description: "Execute a structured test plan deterministically. Runs find/click/verify/screenshot steps internally without LLM round-trips. Returns a compact execution report. 50x faster than individual tool calls for sequential UI interactions. Use operator_model for adaptive steps (judge, handle_unexpected) — uses MCP Sampling, no API key needed.",
         inputSchema: .object([
             "type": .string("object"),
             "properties": .object([
@@ -25,7 +28,7 @@ public enum RunPlanTool {
                 ]),
                 "operator_model": .object([
                     "type": .string("string"),
-                    "description": .string("LLM model for adaptive steps: 'haiku', 'sonnet', or full model ID. Requires ANTHROPIC_API_KEY env var. Omit for pure deterministic execution."),
+                    "description": .string("LLM model preference for adaptive steps: 'haiku' (fast/cheap), 'sonnet' (balanced), 'opus' (smart). Client decides actual model. Omit for pure deterministic execution."),
                 ]),
                 "operator_budget": .object([
                     "type": .string("number"),
@@ -69,15 +72,12 @@ public enum RunPlanTool {
         let operatorModel = args?["operator_model"]?.stringValue
         let operatorBudget = args?["operator_budget"]?.intValue ?? 10
 
-        // Create operator bridge (optional)
-        let bridge: OperatorBridge?
-        do {
-            bridge = try OperatorBridge.create(model: operatorModel, maxCalls: operatorBudget)
-        } catch {
-            // API key missing but operator requested — warn but continue deterministically
-            Log.warn("run_plan: Operator disabled: \(error)")
-            bridge = nil
-        }
+        // Create operator bridge via MCP Sampling (no API key needed)
+        let bridge = OperatorBridge.create(
+            server: server,
+            model: operatorModel,
+            maxCalls: operatorBudget
+        )
 
         // Execute
         let executor = PlanExecutor(
