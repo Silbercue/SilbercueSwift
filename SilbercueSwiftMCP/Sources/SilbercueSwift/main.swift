@@ -72,9 +72,6 @@ let server = Server(
     capabilities: .init(tools: .init(listChanged: true))
 )
 
-// Enable MCP Sampling for run_plan operator
-RunPlanTool.server = server
-
 // List tools (filtered by license tier)
 await server.withMethodHandler(ListTools.self) { _ in
     .init(tools: ToolRegistry.allTools())

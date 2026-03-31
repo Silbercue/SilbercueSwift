@@ -37,4 +37,9 @@ public final class VariableStore {
     }
 
     public var availableKeys: [String] { Array(bindings.keys) }
+
+    /// Export all bindings for session persistence.
+    public func exportAll() -> [String: UIActions.ElementBinding] {
+        bindings
+    }
 }

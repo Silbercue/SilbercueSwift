@@ -46,5 +46,6 @@ public enum ToolRegistry {
         register(ConsoleTools.registrations)
         register(TestTools.registrations)
         register([RunPlanTool.registration])
+        register([RunPlanDecideTool.registration])
     }
 }

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import MCP
 @testable import SilbercueSwiftCore
@@ -555,5 +556,239 @@ struct PlanStepDescriptionTests {
     func verifyDesc() {
         let step = PlanStep.verify(condition: .screenContains(["A", "B"]))
         #expect(step.description == "verify screen_contains [A, B]")
+    }
+}
+
+// MARK: - OperatorBridge Tests
+
+@Suite("OperatorBridge")
+struct OperatorBridgeTests {
+
+    @Test("Decision struct")
+    func decision() {
+        let decision = OperatorBridge.Decision(action: "accept", reasoning: "looks good")
+        #expect(decision.action == "accept")
+        #expect(decision.reasoning == "looks good")
+    }
+
+    @Test("PauseForDecision carries context")
+    func pauseCarriesContext() {
+        let pause = OperatorBridge.PauseForDecision(
+            question: "Is it loaded?",
+            screenshotBase64: "abc123",
+            context: "judge step"
+        )
+        #expect(pause.question == "Is it loaded?")
+        #expect(pause.screenshotBase64 == "abc123")
+        #expect(pause.context == "judge step")
+    }
+
+    @Test("Create bridge enabled returns non-nil")
+    func createEnabled() {
+        let bridge = OperatorBridge.create(maxCalls: 5, enabled: true)
+        #expect(bridge != nil)
+    }
+
+    @Test("Create bridge disabled returns nil")
+    func createDisabled() {
+        let bridge = OperatorBridge.create(enabled: false)
+        #expect(bridge == nil)
+    }
+
+    @Test("ask() always throws PauseForDecision")
+    func askAlwaysPauses() async {
+        let bridge = OperatorBridge(maxCalls: 10)
+        do {
+            let _ = try await bridge.ask(question: "test?", context: "unit test")
+            Issue.record("Expected PauseForDecision to be thrown")
+        } catch is OperatorBridge.PauseForDecision {
+            // Expected
+        } catch {
+            Issue.record("Expected PauseForDecision, got: \(error)")
+        }
+    }
+}
+
+// MARK: - PlanSessionStore Tests
+
+@Suite("PlanSessionStore")
+struct PlanSessionStoreTests {
+
+    @Test("Store and consume session")
+    func storeAndConsume() async {
+        let store = PlanSessionStore()
+        let session = makeTestSession(id: "test-1")
+        let _ = await store.store(session)
+        #expect(await store.exists("test-1"))
+        let retrieved = await store.consume("test-1")
+        #expect(retrieved != nil)
+        #expect(retrieved?.sessionId == "test-1")
+        #expect(await store.exists("test-1") == false)
+    }
+
+    @Test("Consume non-existent session returns nil")
+    func consumeNonExistent() async {
+        let store = PlanSessionStore()
+        let retrieved = await store.consume("doesnt-exist")
+        #expect(retrieved == nil)
+    }
+
+    @Test("Session count tracks active sessions")
+    func sessionCount() async {
+        let store = PlanSessionStore()
+        let _ = await store.store(makeTestSession(id: "s1"))
+        let _ = await store.store(makeTestSession(id: "s2"))
+        #expect(await store.activeCount == 2)
+        let _ = await store.consume("s1")
+        #expect(await store.activeCount == 1)
+    }
+
+    private func makeTestSession(id: String) -> PlanSessionStore.SuspendedPlan {
+        PlanSessionStore.SuspendedPlan(
+            sessionId: id,
+            allSteps: [.wait(ms: 100), .judge(question: "ok?", screenshot: false)],
+            pausedAtIndex: 1,
+            pendingDecision: .init(question: "ok?", screenshotBase64: nil, context: "test"),
+            completedResults: [
+                .init(index: 0, description: "wait 100ms", status: .passed, elapsedMs: 100)
+            ],
+            collectedScreenshots: [],
+            variableBindings: [:],
+            onError: .abortWithScreenshot,
+            timeoutMs: 30000,
+            startTime: CFAbsoluteTimeGetCurrent(),
+            operatorBudget: 10,
+            operatorCallsUsed: 0,
+            createdAt: Date()
+        )
+    }
+}
+
+// MARK: - AnthropicClient Tests (kept for model resolution + optional benchmarks)
+
+@Suite("AnthropicClient")
+struct AnthropicClientTests {
+
+    @Test("Model resolution")
+    func resolveModel() {
+        #expect(AnthropicClient.resolveModel("haiku") == "claude-haiku-4-5-20251001")
+        #expect(AnthropicClient.resolveModel("sonnet") == "claude-sonnet-4-6")
+        #expect(AnthropicClient.resolveModel("opus") == "claude-opus-4-6")
+        #expect(AnthropicClient.resolveModel("custom-id") == "custom-id")
+    }
+}
+
+// MARK: - PlanOutcome Tests
+
+@Suite("PlanOutcome")
+struct PlanOutcomeTests {
+
+    @Test("Completed outcome wraps PlanResult")
+    func completedOutcome() {
+        let result = ReportBuilder.PlanResult(
+            steps: [.init(index: 0, description: "wait", status: .passed, elapsedMs: 10)],
+            screenshots: [],
+            passed: true,
+            summary: "1/1 passed (10ms)",
+            elapsedMs: 10
+        )
+        if case .completed(let r) = PlanOutcome.completed(result) {
+            #expect(r.passed)
+        } else {
+            Issue.record("Expected completed outcome")
+        }
+    }
+
+    @Test("Suspended outcome carries session info")
+    func suspendedOutcome() {
+        let info = PlanOutcome.SuspendInfo(
+            sessionId: "abc-123", question: "Is it done?", screenshotBase64: nil,
+            partialReport: "1/3 steps done", stepsCompleted: 1, stepsTotal: 3
+        )
+        if case .suspended(let i) = PlanOutcome.suspended(info) {
+            #expect(i.sessionId == "abc-123")
+            #expect(i.stepsCompleted == 1)
+        } else {
+            Issue.record("Expected suspended outcome")
+        }
+    }
+}
+
+// MARK: - Pause & Resume E2E Tests
+
+@Suite(.serialized)
+struct PauseResumeTests {
+
+    @Test("Skip: no bridge → step skipped instantly")
+    func skipNoBridge() async {
+        let executor = PlanExecutor(operatorBridge: nil)
+        let outcome = await executor.execute(steps: [
+            .judge(question: "test?", screenshot: false)
+        ])
+        if case .completed(let result) = outcome {
+            #expect(result.passed == true)
+            if case .skipped(let reason) = result.steps[0].status {
+                #expect(reason.contains("No operator"))
+            }
+        } else {
+            Issue.record("Expected completed outcome")
+        }
+    }
+
+    @Test("Pause: bridge enabled → plan suspends at judge step")
+    func pauseAtJudge() async {
+        let bridge = OperatorBridge(maxCalls: 10)
+        let executor = PlanExecutor(operatorBridge: bridge)
+        let outcome = await executor.execute(steps: [
+            .wait(ms: 10),
+            .judge(question: "Is the button visible?", screenshot: false),
+            .wait(ms: 10),
+        ])
+
+        if case .suspended(let info) = outcome {
+            #expect(info.stepsCompleted == 1)
+            #expect(info.stepsTotal == 3)
+            #expect(info.question.contains("button"))
+            #expect(!info.sessionId.isEmpty)
+        } else {
+            Issue.record("Expected suspended outcome")
+        }
+    }
+
+    @Test("Resume: provide decision → plan completes")
+    func resumeWithDecision() async {
+        let bridge = OperatorBridge(maxCalls: 10)
+        let executor = PlanExecutor(operatorBridge: bridge)
+        let outcome = await executor.execute(steps: [
+            .wait(ms: 10),
+            .judge(question: "test?", screenshot: false),
+            .wait(ms: 10),
+        ])
+
+        guard case .suspended(let info) = outcome else {
+            Issue.record("Expected suspended outcome")
+            return
+        }
+
+        guard let session = await PlanSessionStore.shared.consume(info.sessionId) else {
+            Issue.record("Session not found")
+            return
+        }
+
+        // Resume with "accept"
+        let resumeExecutor = PlanExecutor(onError: session.onError, timeoutMs: session.timeoutMs)
+        var restoredResults = session.completedResults
+        restoredResults.append(ReportBuilder.StepResult(
+            index: session.pausedAtIndex, description: "judge", status: .passed, elapsedMs: 0
+        ))
+        resumeExecutor.restore(results: restoredResults, screenshots: [], bindings: [:])
+        let resumeOutcome = await resumeExecutor.execute(steps: session.allSteps, startAt: session.pausedAtIndex + 1)
+
+        if case .completed(let result) = resumeOutcome {
+            #expect(result.passed == true)
+            #expect(result.steps.count == 3)
+        } else {
+            Issue.record("Expected completed outcome after resume")
+        }
     }
 }
