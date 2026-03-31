@@ -482,6 +482,38 @@ public actor WDAClient {
         }
     }
 
+    // MARK: - Element Geometry
+
+    public struct ElementRect: Sendable {
+        public let x: Int
+        public let y: Int
+        public let width: Int
+        public let height: Int
+
+        public var centerX: Int { x + width / 2 }
+        public var centerY: Int { y + height / 2 }
+
+        public var description: String {
+            "{x:\(x), y:\(y), w:\(width), h:\(height)}"
+        }
+    }
+
+    public func getElementRect(elementId: String) async throws -> ElementRect {
+        let sid = try await ensureSession()
+        let json = try await jsonRequest(
+            method: "GET",
+            path: "/session/\(sid)/element/\(elementId)/rect"
+        )
+        guard let value = json["value"] as? [String: Any],
+              let x = (value["x"] as? NSNumber)?.intValue,
+              let y = (value["y"] as? NSNumber)?.intValue,
+              let width = (value["width"] as? NSNumber)?.intValue,
+              let height = (value["height"] as? NSNumber)?.intValue else {
+            throw WDAError.invalidResponse("Invalid rect response")
+        }
+        return ElementRect(x: x, y: y, width: width, height: height)
+    }
+
     // MARK: - Element Interaction
 
     public func click(elementId: String) async throws {

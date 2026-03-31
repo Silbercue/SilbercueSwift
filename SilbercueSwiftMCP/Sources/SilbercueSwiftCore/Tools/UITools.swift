@@ -328,8 +328,15 @@ enum UITools {
             let (elementId, swipes) = try await WDAClient.shared.findElement(
                 using: using, value: value, scroll: scroll, direction: direction, maxSwipes: maxSwipes
             )
+            // Fetch element rect (best-effort — don't fail if rect unavailable)
+            let rectStr: String
+            if let rect = try? await WDAClient.shared.getElementRect(elementId: elementId) {
+                rectStr = " — frame: \(rect.description), center: (\(rect.centerX), \(rect.centerY))"
+            } else {
+                rectStr = ""
+            }
             let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            var msg = "Element found: \(elementId) (\(elapsed)ms)"
+            var msg = "Element found: \(elementId) (\(elapsed)ms)\(rectStr)"
             if swipes > 0 {
                 msg += " — scrolled \(swipes) time(s) \(direction)"
             }
@@ -347,8 +354,25 @@ enum UITools {
         do {
             let start = CFAbsoluteTimeGetCurrent()
             let elements = try await WDAClient.shared.findElements(using: using, value: value)
+            // Fetch rects in parallel (best-effort)
+            let rects = await withTaskGroup(of: (Int, WDAClient.ElementRect?).self) { group in
+                for (i, eid) in elements.enumerated() {
+                    group.addTask {
+                        (i, try? await WDAClient.shared.getElementRect(elementId: eid))
+                    }
+                }
+                var result = [Int: WDAClient.ElementRect?]()
+                for await (i, rect) in group { result[i] = rect }
+                return result
+            }
             let elapsed = String(format: "%.0f", (CFAbsoluteTimeGetCurrent() - start) * 1000)
-            return .ok("Found \(elements.count) elements (\(elapsed)ms):\n" + elements.enumerated().map { "  [\($0.offset)] \($0.element)" }.joined(separator: "\n"))
+            let lines = elements.enumerated().map { i, eid in
+                if let rect = rects[i] ?? nil {
+                    return "  [\(i)] \(eid) — frame: \(rect.description), center: (\(rect.centerX), \(rect.centerY))"
+                }
+                return "  [\(i)] \(eid)"
+            }
+            return .ok("Found \(elements.count) elements (\(elapsed)ms):\n" + lines.joined(separator: "\n"))
         } catch {
             return .fail("Find elements failed: \(error)")
         }
