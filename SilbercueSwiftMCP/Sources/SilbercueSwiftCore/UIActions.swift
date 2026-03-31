@@ -48,13 +48,46 @@ public enum UIActions {
     // MARK: - Click / Tap
 
     /// Click a UI element by its ID.
+    /// With IndigoHID: fetches rect, taps at center (~98ms vs ~270ms WDA click).
     public static func click(elementId: String) async throws {
-        try await WDAClient.shared.click(elementId: elementId)
+        if let native = await SessionState.shared.nativeInput,
+           let rect = try? await WDAClient.shared.getElementRect(elementId: elementId) {
+            try await native.tap(x: Double(rect.centerX), y: Double(rect.centerY))
+        } else {
+            try await WDAClient.shared.click(elementId: elementId)
+        }
     }
 
     /// Tap at specific x,y coordinates.
+    /// IndigoHID: ~48ms. WDA fallback: ~200ms.
     public static func tap(x: Double, y: Double) async throws {
-        try await WDAClient.shared.tap(x: x, y: y)
+        if let native = await SessionState.shared.nativeInput {
+            try await native.tap(x: x, y: y)
+        } else {
+            try await WDAClient.shared.tap(x: x, y: y)
+        }
+    }
+
+    /// Swipe from A to B.
+    /// IndigoHID: ~262ms. WDA fallback: ~1121ms.
+    public static func swipe(
+        fromX: Double, fromY: Double,
+        toX: Double, toY: Double,
+        durationMs: Int = 300
+    ) async throws {
+        if let native = await SessionState.shared.nativeInput {
+            try await native.swipe(
+                fromX: fromX, fromY: fromY,
+                toX: toX, toY: toY,
+                durationMs: durationMs
+            )
+        } else {
+            try await WDAClient.shared.swipe(
+                startX: fromX, startY: fromY,
+                endX: toX, endY: toY,
+                durationMs: durationMs
+            )
+        }
     }
 
     // MARK: - Text
@@ -117,7 +150,7 @@ public enum UIActions {
             guard let center = await findBackButtonCenter() else {
                 throw UIActionError.noBackButton
             }
-            try await WDAClient.shared.tap(x: Double(center.x), y: Double(center.y))
+            try await tap(x: Double(center.x), y: Double(center.y))
             try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)
             steps.append("back")
         }
@@ -131,7 +164,7 @@ public enum UIActions {
         )
 
         // Step 3: Click
-        try await WDAClient.shared.click(elementId: elementId)
+        try await click(elementId: elementId)
 
         // Step 4: Settle
         try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)

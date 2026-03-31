@@ -193,9 +193,9 @@ Direct HTTP communication with WDA — no Appium, no Node.js, no Python.
 |---|---|---|
 | `handle_alert` | **Accept, dismiss, or batch-handle system & in-app alerts** | ~200ms |
 | `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (SmartScroll — 3 fallback strategies) | ~100ms |
-| `click_element` | Tap a UI element | ~400ms |
-| `tap_coordinates` / `double_tap` / `long_press` | Coordinate-based gestures | ~200ms |
-| `swipe` / `pinch` | Directional swipe, zoom in/out | ~400-600ms |
+| `click_element` | Tap a UI element | **~180ms** (IndigoHID) / ~400ms (WDA) |
+| `tap_coordinates` / `double_tap` / `long_press` | Coordinate-based gestures | **~48ms** (IndigoHID) / ~200ms (WDA) |
+| `swipe` / `pinch` | Directional swipe, zoom in/out | **~262ms** (IndigoHID) / ~400-600ms (WDA) |
 | `drag_and_drop` | **Drag from source to target** — element-to-element, coordinates, or mixed. Smart defaults for reorderable lists, Kanban boards, sliders | ~2300ms |
 | `type_text` / `get_text` | Type into or read from elements | ~100-300ms |
 | `get_source` | Full view hierarchy (JSON/XML) | ~20ms |
@@ -403,7 +403,9 @@ Measured on M3 MacBook Pro, iOS 26.4 Simulator:
 |---|---|---|
 | Screenshot | ~0.5s | **~15ms** (30x) |
 | Find element | ~500ms | **~100ms** (5x) |
-| Click element | ~500ms | **~400ms** |
+| Click element | ~500ms | **~180ms** (IndigoHID) / ~400ms (WDA) |
+| Tap (coordinates) | ~500ms | **~48ms** (IndigoHID, 10x) / ~200ms (WDA) |
+| Swipe | ~500ms | **~262ms** (IndigoHID) / ~400ms (WDA) |
 | View hierarchy | ~15s | **~20ms** (750x) |
 | Handle alert | ~500ms | **~200ms** |
 | Handle 3 alerts (batch) | ~1500ms (3 calls) | **~800ms (1 call)** |
@@ -428,7 +430,7 @@ SilbercueSwift (8.5MB Swift binary)
     ├── TestTools        → xcodebuild test + xcresulttool + xccov
     ├── SimTools         → simctl + WDA orientation
     ├── ScreenshotTools  → TurboCapture (Pro) / simctl (Free)
-    ├── UITools          → WebDriverAgent (direct HTTP, 3-tier alert search)
+    ├── UITools          → IndigoHID native input (tap/swipe) + WDA fallback (3-tier alert search)
     ├── LogTools         → log stream + 4-layer filter (noise, mode, topic, dedup) + regex matching
     ├── ConsoleTools     → stdout/stderr capture
     ├── VisualTools      → pixel diff + layout scoring

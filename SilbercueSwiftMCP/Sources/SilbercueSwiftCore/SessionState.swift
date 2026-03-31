@@ -13,6 +13,8 @@ public actor SessionState {
     public private(set) var simulator: String?
     public private(set) var bundleId: String?
     public private(set) var appPath: String?
+    private(set) var nativeInput: IndigoHIDClient?
+    private var nativeInputUDID: String?
 
     // Auto-promotion: consecutive explicit values become defaults
     private var projectStreak: (value: String, count: Int) = ("", 0)
@@ -60,10 +62,14 @@ public actor SessionState {
         } else if let stored = simulator {
             raw = stored
         } else {
-            return try await AutoDetect.simulator()
+            let udid = try await AutoDetect.simulator()
+            initNativeInputIfNeeded(udid: udid)
+            return udid
         }
         // Full UDID or "booted" → pass through (SimTools.resolveSimulator handles both)
-        return try await SimTools.resolveSimulator(raw)
+        let udid = try await SimTools.resolveSimulator(raw)
+        initNativeInputIfNeeded(udid: udid)
+        return udid
     }
 
     // MARK: - Build info (populated after successful build_sim)
@@ -105,9 +111,26 @@ public actor SessionState {
         simulator = nil
         bundleId = nil
         appPath = nil
+        nativeInput = nil
+        nativeInputUDID = nil
         projectStreak = ("", 0)
         schemeStreak = ("", 0)
         simulatorStreak = ("", 0)
+    }
+
+    // MARK: - Native Input (IndigoHID)
+
+    private func initNativeInputIfNeeded(udid: String) {
+        guard udid != nativeInputUDID else { return }
+        nativeInputUDID = udid
+        nativeInput = IndigoHIDClient.createIfAvailable(udid: udid)
+        if nativeInput != nil {
+            Log.warn("Input:      IndigoHID (native, ~48ms tap)")
+        } else {
+            Log.warn("Input:      WDA (http, ~200ms tap)")
+        }
+        Log.warn("Tree:       WDA (http, ~20ms)")
+        Log.warn("Screenshot: simctl / TurboCapture (Pro)")
     }
 
     // MARK: - Auto-promotion
