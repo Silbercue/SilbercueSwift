@@ -185,9 +185,13 @@ public enum RunPlanDecideTool {
             if case .handleUnexpected = pausedStep {
                 switch decision {
                 case "accept":
-                    _ = try? await WDAClient.shared.acceptAlert()
+                    if let wda = try? await SessionState.shared.wdaClient() {
+                        _ = try? await wda.acceptAlert()
+                    }
                 case "dismiss":
-                    _ = try? await WDAClient.shared.dismissAlert()
+                    if let wda = try? await SessionState.shared.wdaClient() {
+                        _ = try? await wda.dismissAlert()
+                    }
                 default:
                     break
                 }

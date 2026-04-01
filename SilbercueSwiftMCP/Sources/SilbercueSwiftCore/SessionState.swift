@@ -13,8 +13,8 @@ public actor SessionState {
     public private(set) var simulator: String?
     public private(set) var bundleId: String?
     public private(set) var appPath: String?
-    private(set) var nativeInput: IndigoHIDClient?
-    private var nativeInputUDID: String?
+    /// Per-UDID HID clients for multi-simulator support.
+    private var nativeInputs: [String: IndigoHIDClient] = [:]
 
     // Auto-promotion: consecutive explicit values become defaults
     private var projectStreak: (value: String, count: Int) = ("", 0)
@@ -113,33 +113,62 @@ public actor SessionState {
         simulator = nil
         bundleId = nil
         appPath = nil
-        nativeInput = nil
-        nativeInputUDID = nil
+        nativeInputs.removeAll()
         projectStreak = ("", 0)
         schemeStreak = ("", 0)
         simulatorStreak = ("", 0)
     }
 
-    // MARK: - Native Input (IndigoHID)
+    // MARK: - Native Input (IndigoHID) — per-UDID
 
-    /// Discard stale HID client (e.g. after machPortInvalid).
+    /// Get the HID client for a specific simulator UDID, or nil if none available.
+    func nativeInput(for udid: String) -> IndigoHIDClient? {
+        nativeInputs[udid]
+    }
+
+    /// Backward-compat: HID client for the session's current simulator.
+    var nativeInput: IndigoHIDClient? {
+        guard let sim = simulator else { return nil }
+        return nativeInputs[sim]
+    }
+
+    /// Discard stale HID client for a specific UDID (e.g. after machPortInvalid).
     /// Next resolveSimulator() call will re-create it.
+    func invalidateNativeInput(for udid: String) {
+        nativeInputs.removeValue(forKey: udid)
+    }
+
+    /// Discard all stale HID clients.
     func invalidateNativeInput() {
-        nativeInput = nil
-        nativeInputUDID = nil
+        nativeInputs.removeAll()
     }
 
     private func initNativeInputIfNeeded(udid: String) {
-        guard udid != nativeInputUDID else { return }
-        nativeInputUDID = udid
-        nativeInput = IndigoHIDClient.createIfAvailable(udid: udid)
-        if nativeInput != nil {
-            Log.warn("Input:      IndigoHID (native, ~48ms tap)")
+        guard nativeInputs[udid] == nil else { return }
+        let client = IndigoHIDClient.createIfAvailable(udid: udid)
+        if let client {
+            nativeInputs[udid] = client
+            Log.warn("Input:      IndigoHID (native, ~48ms tap) for \(String(udid.prefix(8)))…")
         } else {
-            Log.warn("Input:      WDA (http, ~200ms tap)")
+            Log.warn("Input:      WDA (http, ~200ms tap) for \(String(udid.prefix(8)))…")
         }
         Log.warn("Tree:       WDA (http, ~20ms)")
         Log.warn("Screenshot: simctl / TurboCapture (Pro)")
+    }
+
+    // MARK: - WDA Client (per-UDID via WDAClientManager)
+
+    /// Get the WDAClient for a specific simulator UDID.
+    /// Creates a new client with an assigned port if none exists.
+    public func wdaClient(for udid: String) async -> WDAClient {
+        await WDAClientManager.shared.clientOrCreate(for: udid)
+    }
+
+    /// Get the WDAClient for the session's current simulator.
+    /// Resolves the simulator first if needed.
+    public func wdaClient() async throws -> WDAClient {
+        let udid = try await resolveSimulator(nil)
+        return await WDAClientManager.shared.clientOrCreate(for: udid)
     }
 
     // MARK: - Auto-promotion
