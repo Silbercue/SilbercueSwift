@@ -355,6 +355,12 @@ enum SimTools {
             let result = try await Shell.xcrun(timeout: 10, "simctl", "shutdown", target)
             if result.succeeded {
                 Task { await SimStateCache.shared.recordShutdown(udid: target) }
+                // Cleanup WDA client for shut-down simulator
+                if target == "all" {
+                    await WDAClientManager.shared.removeAllClients()
+                } else {
+                    await WDAClientManager.shared.handleSimulatorShutdown(udid: target)
+                }
                 return .ok("Simulator shutdown: \(target)")
             }
             return .fail("Shutdown failed: \(result.stderr)")
@@ -379,7 +385,8 @@ enum SimTools {
 
             // Invalidate WDA session — reinstalled app binary makes the old session stale.
             // Stale sessions accumulate and eventually crash WDA after multiple install cycles.
-            try? await WDAClient.shared.deleteSession()
+            let wda = await WDAClientManager.shared.client(for: udid)
+            try? await wda?.deleteSession()
 
             return result.succeeded ? .ok("App installed on \(udid)") : .fail("Install failed: \(result.stderr)")
         } catch {
@@ -411,9 +418,10 @@ enum SimTools {
                 var output = "Launched \(bundleId) on \(udid)\n\(result.stdout)"
 
                 // Auto-WDA session: if WDA is running, create/update session for the launched app
-                if await WDAClient.shared.isHealthy() {
+                let wda = await WDAClientManager.shared.clientOrCreate(for: udid)
+                if await wda.isHealthy() {
                     do {
-                        let sessionId = try await WDAClient.shared.createSession(bundleId: bundleId)
+                        let sessionId = try await wda.createSession(bundleId: bundleId)
                         output += "\nWDA session: \(sessionId)"
                     } catch {
                         output += "\nWDA session failed: \(error) — use wda_create_session manually"
@@ -449,7 +457,8 @@ enum SimTools {
 
             // Invalidate WDA session — the terminated app may have been the session target.
             // Keeping a stale session causes WDA instability over multiple terminate cycles.
-            try? await WDAClient.shared.deleteSession()
+            let wda = await WDAClientManager.shared.client(for: udid)
+            try? await wda?.deleteSession()
 
             if result.succeeded {
                 Task { await SimStateCache.shared.recordAppTerminate(udid: udid) }
@@ -489,7 +498,12 @@ enum SimTools {
             let result = try await Shell.xcrun(timeout: 30, "simctl", "erase", target)
 
             if result.succeeded {
-                try? await WDAClient.shared.deleteSession()
+                if target != "all" {
+                    let wda = await WDAClientManager.shared.client(for: target)
+                    try? await wda?.deleteSession()
+                } else {
+                    await WDAClientManager.shared.removeAll()
+                }
                 return .ok("Erased simulator: \(target)")
             }
             if result.stderr.contains("state: Booted") {
@@ -510,7 +524,7 @@ enum SimTools {
             let result = try await Shell.xcrun(timeout: 30, "simctl", "delete", udid)
 
             if result.succeeded {
-                try? await WDAClient.shared.deleteSession()
+                await WDAClientManager.shared.removeClientAndPort(for: udid)
                 return .ok("Deleted simulator: \(udid)")
             }
             return .fail("Delete failed: \(result.stderr)")
@@ -564,6 +578,10 @@ enum SimTools {
             // Update cache with fresh simctl data (after local iteration is done)
             await SimStateCache.shared.updateFromSimctl(deviceGroups)
             let cached = await SimStateCache.shared.allEntries()
+
+            // Prune stale WDA clients for simulators that are no longer booted
+            let bootedUDIDs = Set(sims.filter(\.isBooted).map(\.udid))
+            await WDAClientManager.shared.cleanupUnbooted(bootedUDIDs: bootedUDIDs)
 
             let booted = sims.filter(\.isBooted).sorted { $0.name < $1.name }
             let shutdown = sims.filter { !$0.isBooted }.sorted { $0.name < $1.name }
@@ -662,8 +680,9 @@ enum SimTools {
                 let entry = await SimStateCache.shared.entry(for: udid)
                 guard entry?.state == "Booted" else { continue }
 
-                // WDA health
-                let healthy = await WDAClient.shared.isHealthy()
+                // WDA health — per-UDID via WDAClientManager
+                let wdaClient = await WDAClientManager.shared.client(for: udid)
+                let healthy = await wdaClient?.isHealthy() ?? false
                 await SimStateCache.shared.recordWDAStatus(udid: udid, status: healthy ? "healthy" : "not responding")
 
                 // Console errors
@@ -720,10 +739,35 @@ enum SimTools {
                     lines.append("Alert:       \(alert)\(age.isEmpty ? "" : " (\(age))")")
                 }
 
-                // WDA
+                // WDA + port (per-UDID via WDAClientManager)
                 if let wda = entry.wdaStatus {
                     let age = await cache.age(entry.wdaTimestamp) ?? ""
-                    lines.append("WDA:         \(wda)\(age.isEmpty ? "" : " (\(age))")")
+                    let wdaPort = await WDAClientManager.shared.port(for: udid)
+                    let portStr = wdaPort.map { " (port \($0))" } ?? ""
+                    lines.append("WDA:         \(wda)\(portStr)\(age.isEmpty ? "" : " (\(age))")")
+                } else {
+                    // No cached WDA status — check if a WDA client exists
+                    let wdaPort = await WDAClientManager.shared.port(for: udid)
+                    if let port = wdaPort {
+                        lines.append("WDA:         port \(port) (not checked)")
+                    }
+                }
+
+                // HID (IndigoHID native input)
+                let hidConnected = await SessionState.shared.nativeInput(for: udid) != nil
+                lines.append("HID:         \(hidConnected ? "connected" : "not connected")")
+
+                // Session default — resolve to full UDID before comparing
+                // (SessionState.simulator can be a name like "iPhone 16" or short prefix)
+                let sessionDefaultRaw = await SessionState.shared.simulator
+                let sessionDefaultUDID: String? = if let raw = sessionDefaultRaw {
+                    try? await resolveSimulator(raw)
+                } else {
+                    nil
+                }
+                let isSessionDefault = sessionDefaultUDID == udid
+                if isSessionDefault {
+                    lines.append("Session:     ★ default")
                 }
 
                 // Console
@@ -748,7 +792,21 @@ enum SimTools {
             sections.append(lines.joined(separator: "\n"))
         }
 
-        return .ok(sections.joined(separator: "\n\n"))
+        // Mismatch warnings (cross-device WDA issues)
+        // Resolve session default to full UDID for accurate mismatch detection
+        var warnings: [String] = []
+        if let defaultRaw = await SessionState.shared.simulator,
+           let resolvedDefault = try? await resolveSimulator(defaultRaw) {
+            if let mismatch = await WDAClientManager.shared.mismatchWarning(targetUDID: resolvedDefault) {
+                warnings.append(mismatch)
+            }
+        }
+
+        var output = sections.joined(separator: "\n\n")
+        if !warnings.isEmpty {
+            output += "\n\n--- Warnings ---\n" + warnings.joined(separator: "\n")
+        }
+        return .ok(output)
     }
 
     // MARK: - Device Orientation
@@ -758,7 +816,8 @@ enum SimTools {
             return .fail("Missing required: orientation (PORTRAIT, LANDSCAPE, LANDSCAPE_LEFT, LANDSCAPE_RIGHT)")
         }
         do {
-            let result = try await WDAClient.shared.setOrientation(orientation)
+            let wda = try await SessionState.shared.wdaClient()
+            let result = try await wda.setOrientation(orientation)
             Task {
                 guard let udid = await SimStateCache.currentUDID() else { return }
                 await SimStateCache.shared.recordOrientation(udid: udid, orientation: result)

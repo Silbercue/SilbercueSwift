@@ -172,14 +172,16 @@ public final class PlanExecutor {
                 guard let cx = binding.centerX, let cy = binding.centerY else {
                     return .step(.failed("No coordinates for double_tap"), [])
                 }
-                try await WDAClient.shared.doubleTap(x: Double(cx), y: Double(cy))
+                let wda = try await SessionState.shared.wdaClient()
+                try await wda.doubleTap(x: Double(cx), y: Double(cy))
 
             case .longPress(let target, let durationMs):
                 let binding = try await variables.resolveTarget(target)
                 guard let cx = binding.centerX, let cy = binding.centerY else {
                     return .step(.failed("No coordinates for long_press"), [])
                 }
-                try await WDAClient.shared.longPress(x: Double(cx), y: Double(cy), durationMs: durationMs)
+                let wda = try await SessionState.shared.wdaClient()
+                try await wda.longPress(x: Double(cx), y: Double(cy), durationMs: durationMs)
 
             case .swipe(let direction, let element):
                 let (startX, startY, endX, endY) = try await resolveSwipe(direction: direction, element: element)
@@ -297,7 +299,8 @@ public final class PlanExecutor {
         }
 
         // Check if an alert is visible
-        guard let alertInfo = await WDAClient.shared.getAlertText() else {
+        let wda = try? await SessionState.shared.wdaClient()
+        guard let wda, let alertInfo = await wda.getAlertText() else {
             return .step(.passed, [])  // No alert → nothing unexpected → pass
         }
 
@@ -313,10 +316,10 @@ public final class PlanExecutor {
 
             switch decision.action {
             case "accept":
-                _ = try? await WDAClient.shared.acceptAlert()
+                _ = try? await wda.acceptAlert()
                 return .step(.passed, ss.map { [$0] } ?? [])
             case "dismiss":
-                _ = try? await WDAClient.shared.dismissAlert()
+                _ = try? await wda.dismissAlert()
                 return .step(.passed, ss.map { [$0] } ?? [])
             case "abort":
                 return .step(.failed("Operator abort on alert [operator]: \(decision.reasoning)"), ss.map { [$0] } ?? [])

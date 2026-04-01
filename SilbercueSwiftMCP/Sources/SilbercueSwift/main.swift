@@ -45,7 +45,7 @@ if cliArgs.count >= 2 {
         fputs("SilbercueSwift v\(SilbercueSwiftVersion.current) \(tier) — \(toolCount) tools available\n", stderr)
         Foundation.exit(0)
 
-    case "version":
+    case "version", "--version", "-v":
         fputs("SilbercueSwift v\(SilbercueSwiftVersion.current)\n", stderr)
         Foundation.exit(0)
 

@@ -382,7 +382,8 @@ enum BuildTools {
             return .fail("Build succeeded in \(buildElapsed)s\nInstall FAILED: \(installResult.stderr)")
         }
 
-        try? await WDAClient.shared.deleteSession()
+        let wda = await WDAClientManager.shared.client(for: udid)
+        try? await wda?.deleteSession()
         let installElapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - installStart)
 
         // Launch (--terminate-running-process replaces separate terminate + 0.5s sleep)
@@ -418,9 +419,10 @@ enum BuildTools {
         output += "\n  Simulator: opened"
 
         // Auto-WDA session: if WDA is running, create/update session for the launched app
-        if await WDAClient.shared.isHealthy() {
+        let wdaForLaunch = await WDAClientManager.shared.clientOrCreate(for: udid)
+        if await wdaForLaunch.isHealthy() {
             do {
-                let sessionId = try await WDAClient.shared.createSession(bundleId: bundleId)
+                let sessionId = try await wdaForLaunch.createSession(bundleId: bundleId)
                 output += "\n  WDA:       session \(sessionId)"
             } catch {
                 output += "\n  WDA:       session failed — use wda_create_session manually"

@@ -4,6 +4,8 @@ import MCP
 /// Reusable, typed UI automation primitives.
 /// Called by UITools (MCP handlers) and PlanExecutor (Pro batch execution).
 /// Returns Swift types instead of MCP CallTool.Result strings.
+///
+/// All WDA calls route through WDAClientManager (per-UDID) via SessionState.
 public enum UIActions {
 
     // MARK: - Types
@@ -25,6 +27,18 @@ public enum UIActions {
         public let steps: [String]
     }
 
+    // MARK: - WDA Resolution
+
+    /// Get the WDAClient for the session's current simulator.
+    private static func wda() async throws -> WDAClient {
+        try await SessionState.shared.wdaClient()
+    }
+
+    /// Get the UDID of the session's current simulator.
+    private static func currentUDID() async throws -> String {
+        try await SessionState.shared.resolveSimulator(nil)
+    }
+
     // MARK: - Find
 
     /// Find a UI element and return its binding (id + rect + label).
@@ -35,13 +49,14 @@ public enum UIActions {
         direction: String = "auto",
         maxSwipes: Int = 10
     ) async throws -> ElementBinding {
-        let (elementId, swipes) = try await WDAClient.shared.findElement(
+        let client = try await wda()
+        let (elementId, swipes) = try await client.findElement(
             using: using, value: value, scroll: scroll,
             direction: direction, maxSwipes: maxSwipes
         )
-        let rect = try? await WDAClient.shared.getElementRect(elementId: elementId)
+        let rect = try? await client.getElementRect(elementId: elementId)
         // Try to get label (best-effort)
-        let label = try? await WDAClient.shared.getElementAttribute("label", elementId: elementId)
+        let label = try? await client.getElementAttribute("label", elementId: elementId)
         return ElementBinding(elementId: elementId, rect: rect, swipes: swipes, label: label)
     }
 
@@ -51,31 +66,35 @@ public enum UIActions {
     /// With IndigoHID: fetches rect, taps at center (~72ms vs ~293ms WDA click).
     /// Falls back to WDA on HID failure (e.g. stale Mach port after app reinstall).
     public static func click(elementId: String) async throws {
-        if let native = await SessionState.shared.nativeInput,
-           let rect = try? await WDAClient.shared.getElementRect(elementId: elementId) {
+        let udid = try await currentUDID()
+        let client = await SessionState.shared.wdaClient(for: udid)
+        if let native = await SessionState.shared.nativeInput(for: udid),
+           let rect = try? await client.getElementRect(elementId: elementId) {
             do {
                 try await native.tap(x: Double(rect.centerX), y: Double(rect.centerY))
                 return
             } catch {
-                await SessionState.shared.invalidateNativeInput()
+                await SessionState.shared.invalidateNativeInput(for: udid)
             }
         }
-        try await WDAClient.shared.click(elementId: elementId)
+        try await client.click(elementId: elementId)
     }
 
     /// Tap at specific x,y coordinates.
     /// IndigoHID: ~32ms. WDA fallback: ~547ms.
     /// Falls back to WDA on HID failure (e.g. stale Mach port after app reinstall).
     public static func tap(x: Double, y: Double) async throws {
-        if let native = await SessionState.shared.nativeInput {
+        let udid = try await currentUDID()
+        if let native = await SessionState.shared.nativeInput(for: udid) {
             do {
                 try await native.tap(x: x, y: y)
                 return
             } catch {
-                await SessionState.shared.invalidateNativeInput()
+                await SessionState.shared.invalidateNativeInput(for: udid)
             }
         }
-        try await WDAClient.shared.tap(x: x, y: y)
+        let client = await SessionState.shared.wdaClient(for: udid)
+        try await client.tap(x: x, y: y)
     }
 
     /// Swipe from A to B.
@@ -86,7 +105,8 @@ public enum UIActions {
         toX: Double, toY: Double,
         durationMs: Int = 300
     ) async throws {
-        if let native = await SessionState.shared.nativeInput {
+        let udid = try await currentUDID()
+        if let native = await SessionState.shared.nativeInput(for: udid) {
             do {
                 try await native.swipe(
                     fromX: fromX, fromY: fromY,
@@ -95,10 +115,11 @@ public enum UIActions {
                 )
                 return
             } catch {
-                await SessionState.shared.invalidateNativeInput()
+                await SessionState.shared.invalidateNativeInput(for: udid)
             }
         }
-        try await WDAClient.shared.swipe(
+        let client = await SessionState.shared.wdaClient(for: udid)
+        try await client.swipe(
             startX: fromX, startY: fromY,
             endX: toX, endY: toY,
             durationMs: durationMs
@@ -113,13 +134,14 @@ public enum UIActions {
         elementId: String? = nil,
         clearFirst: Bool = false
     ) async throws {
+        let client = try await wda()
         if let eid = elementId {
             if clearFirst {
-                try await WDAClient.shared.clearElement(elementId: eid)
+                try await client.clearElement(elementId: eid)
             }
-            try await WDAClient.shared.setValue(elementId: eid, text: text)
+            try await client.setValue(elementId: eid, text: text)
         } else {
-            _ = try await WDAClient.shared.ensureSession()
+            _ = try await client.ensureSession()
             let textInputTypes = [
                 "XCUIElementTypeTextField",
                 "XCUIElementTypeTextView",
@@ -127,7 +149,7 @@ public enum UIActions {
             ]
             var foundId: String?
             for typeName in textInputTypes {
-                if let (eid, _) = try? await WDAClient.shared.findElement(
+                if let (eid, _) = try? await client.findElement(
                     using: "class name", value: typeName
                 ) {
                     foundId = eid
@@ -138,15 +160,16 @@ public enum UIActions {
                 throw UIActionError.noTextInput
             }
             if clearFirst {
-                try await WDAClient.shared.clearElement(elementId: eid)
+                try await client.clearElement(elementId: eid)
             }
-            try await WDAClient.shared.setValue(elementId: eid, text: text)
+            try await client.setValue(elementId: eid, text: text)
         }
     }
 
     /// Get text content of a UI element.
     public static func getText(elementId: String) async throws -> String {
-        try await WDAClient.shared.getText(elementId: elementId)
+        let client = try await wda()
+        return try await client.getText(elementId: elementId)
     }
 
     // MARK: - Navigate
@@ -158,6 +181,7 @@ public enum UIActions {
         scroll: Bool = false,
         settleMs: Int = 300
     ) async throws -> NavigateResult {
+        let client = try await wda()
         var steps: [String] = []
 
         // Step 1: Back navigation
@@ -172,7 +196,7 @@ public enum UIActions {
 
         // Step 2: Find target
         let escapedTarget = target.replacingOccurrences(of: "'", with: "\\'")
-        let (elementId, swipes) = try await WDAClient.shared.findElement(
+        let (elementId, swipes) = try await client.findElement(
             using: "predicate string",
             value: "label == '\(escapedTarget)' OR identifier == '\(escapedTarget)'",
             scroll: scroll, direction: "auto", maxSwipes: scroll ? 10 : 0
@@ -199,7 +223,8 @@ public enum UIActions {
 
     /// Get pruned view hierarchy — flat array of interactive/labeled elements with frames.
     public static func getSourcePruned() async throws -> [[String: Any]] {
-        let source = try await WDAClient.shared.getSource(format: "json")
+        let client = try await wda()
+        let source = try await client.getSource(format: "json")
         guard let data = source.data(using: .utf8),
               let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw UIActionError.sourceParseError
@@ -247,7 +272,8 @@ public enum UIActions {
     /// Find back button center by walking WDA source tree.
     /// Uses get_source (0.1s) instead of findElement (avoids 6-18s WDA implicit wait).
     public static func findBackButtonCenter() async -> (x: Int, y: Int)? {
-        guard let source = try? await WDAClient.shared.getSource(format: "json"),
+        guard let client = try? await wda(),
+              let source = try? await client.getSource(format: "json"),
               let data = source.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil

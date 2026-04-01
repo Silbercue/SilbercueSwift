@@ -89,7 +89,8 @@ public enum VerifyEngine {
 
     private static func verifyElementCount(using: String, value: String, equals: Int?, gte: Int?) async -> VerifyResult {
         do {
-            let elements = try await WDAClient.shared.findElements(using: using, value: value)
+            let wda = try await SessionState.shared.wdaClient()
+            let elements = try await wda.findElements(using: using, value: value)
             let count = elements.count
             if let expected = equals {
                 if count == expected {

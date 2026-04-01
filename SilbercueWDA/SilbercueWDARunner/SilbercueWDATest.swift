@@ -18,9 +18,18 @@ final class SilbercueWDATest: XCTestCase {
     }
 
     @objc func testRunServer() {
+        let port: UInt16 = {
+            if let portStr = ProcessInfo.processInfo.environment["USE_PORT"],
+               let p = UInt16(portStr) {
+                return p
+            }
+            return 8100
+        }()
+
         Task {
             do {
-                try await SilbercueWDAServer.shared.start(port: 8100)
+                print("[SilbercueWDA] Starting server on port \(port)")
+                try await SilbercueWDAServer.shared.start(port: port)
             } catch {
                 print("[SilbercueWDA] Server error: \(error)")
             }

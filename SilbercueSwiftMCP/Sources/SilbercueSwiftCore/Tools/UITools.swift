@@ -155,6 +155,13 @@ enum UITools {
         return ToolRegistration(tool: tool, handler: h)
     }
 
+    // MARK: - WDA Resolution Helper
+
+    /// Get the WDAClient for the session's current simulator.
+    private static func wda() async throws -> WDAClient {
+        try await SessionState.shared.wdaClient()
+    }
+
     // MARK: - Implementations
 
     static func handleAlert(_ args: [String: Value]?) async -> CallTool.Result {
@@ -163,9 +170,12 @@ enum UITools {
         }
         let buttonLabel = args?["button_label"]?.stringValue
 
+        let client: WDAClient
+        do { client = try await wda() } catch { return .fail("No simulator: \(error)") }
+
         switch action {
         case "get_text":
-            guard let info = await WDAClient.shared.getAlertText() else {
+            guard let info = await client.getAlertText() else {
                 Task { guard let udid = await SimStateCache.currentUDID() else { return }
                     await SimStateCache.shared.recordAlert(udid: udid, state: "none") }
                 return .ok("No alert visible.")
@@ -176,7 +186,7 @@ enum UITools {
 
         case "accept":
             do {
-                let info = try await WDAClient.shared.acceptAlert(buttonLabel: buttonLabel)
+                let info = try await client.acceptAlert(buttonLabel: buttonLabel)
                 Task { guard let udid = await SimStateCache.currentUDID() else { return }
                     await SimStateCache.shared.recordAlert(udid: udid, state: "none") }
                 var msg = "Alert accepted."
@@ -190,7 +200,7 @@ enum UITools {
 
         case "dismiss":
             do {
-                let info = try await WDAClient.shared.dismissAlert(buttonLabel: buttonLabel)
+                let info = try await client.dismissAlert(buttonLabel: buttonLabel)
                 Task { guard let udid = await SimStateCache.currentUDID() else { return }
                     await SimStateCache.shared.recordAlert(udid: udid, state: "none") }
                 var msg = "Alert dismissed."
@@ -213,7 +223,7 @@ enum UITools {
                     + "Then: silbercueswift activate <YOUR-KEY>")
             }
             do {
-                let result = try await WDAClient.shared.handleAllAlerts(accept: true)
+                let result = try await client.handleAllAlerts(accept: true)
                 if result.count == 0 {
                     return .ok("No alerts visible.")
                 }
@@ -237,7 +247,7 @@ enum UITools {
                     + "Then: silbercueswift activate <YOUR-KEY>")
             }
             do {
-                let result = try await WDAClient.shared.handleAllAlerts(accept: false)
+                let result = try await client.handleAllAlerts(accept: false)
                 if result.count == 0 {
                     return .ok("No alerts visible.")
                 }
@@ -256,16 +266,19 @@ enum UITools {
     }
 
     static func wdaStatus(_ args: [String: Value]?) async -> CallTool.Result {
-        let healthy = await WDAClient.shared.isHealthy()
-        let backendName = await WDAClient.shared.backend.displayName
-        let fallback = await WDAClient.shared.fallbackInfo
+        let client: WDAClient
+        do { client = try await wda() } catch { return .fail("No simulator: \(error)") }
+
+        let healthy = await client.isHealthy()
+        let backendName = await client.backend.displayName
+        let fallback = await client.fallbackInfo
         Task { guard let udid = await SimStateCache.currentUDID() else { return }
             await SimStateCache.shared.recordWDAStatus(udid: udid, status: healthy ? "healthy (\(backendName))" : "not responding") }
 
         if healthy {
             do {
-                let status = try await WDAClient.shared.status()
-                let sessionInfo = "Sessions tracked: \(await WDAClient.shared.sessionCount)"
+                let status = try await client.status()
+                let sessionInfo = "Sessions tracked: \(await client.sessionCount)"
                 var msg = "WDA Status: \(status.ready ? "READY" : "NOT READY")\nBackend: \(backendName)\nBundle: \(status.bundleId)\n\(sessionInfo)"
                 if let info = fallback {
                     msg += "\nInfo: \(info)"
@@ -283,24 +296,27 @@ enum UITools {
         let customURL = args?["wda_url"]?.stringValue
         let bundleId = args?["bundle_id"]?.stringValue
 
+        let client: WDAClient
+        do { client = try await wda() } catch { return .fail("No simulator: \(error)") }
+
         if let url = customURL {
             // Per-call override: try custom URL directly, NO deploy attempt.
-            let previousURL = await WDAClient.shared.getBaseURL()
-            let healthBefore = await WDAClient.shared.isHealthy()
+            let previousURL = await client.getBaseURL()
+            let healthBefore = await client.isHealthy()
             Log.warn("wdaCreateSession: custom URL=\(url), previous=\(previousURL), healthBefore=\(healthBefore)")
-            await WDAClient.shared.setBaseURL(url)
+            await client.setBaseURL(url)
 
             do {
                 // Skip ensureWDARunning — never deploy to a custom URL
-                let sid = try await WDAClient.shared.createSession(bundleId: bundleId)
+                let sid = try await client.createSession(bundleId: bundleId)
                 var msg = "Session created: \(sid) (custom WDA: \(url))"
-                if let warning = await WDAClient.shared.sessionWarning {
+                if let warning = await client.sessionWarning {
                     msg += "\n\(warning)"
                 }
                 return .ok(msg)
             } catch {
-                await WDAClient.shared.setBaseURL(previousURL)
-                let healthAfter = await WDAClient.shared.isHealthy()
+                await client.setBaseURL(previousURL)
+                let healthAfter = await client.isHealthy()
                 Log.warn("wdaCreateSession: custom URL failed: \(error). healthAfter=\(healthAfter), restored to \(previousURL)")
                 return .fail("Connection to \(url) failed: \(error). Default URL (\(previousURL)) restored.")
             }
@@ -308,12 +324,12 @@ enum UITools {
 
         // Default path: ensureWDARunning + createSession
         do {
-            try await WDAClient.shared.ensureWDARunning()
+            try await client.ensureWDARunning()
 
-            let sid = try await WDAClient.shared.createSession(bundleId: bundleId)
+            let sid = try await client.createSession(bundleId: bundleId)
             var msg = "Session created: \(sid)"
 
-            if let warning = await WDAClient.shared.sessionWarning {
+            if let warning = await client.sessionWarning {
                 msg += "\n\(warning)"
             }
             return .ok(msg)
@@ -369,14 +385,18 @@ enum UITools {
               let value = args?["value"]?.stringValue else {
             return .fail("Missing required: using, value")
         }
+
+        let client: WDAClient
+        do { client = try await wda() } catch { return .fail("No simulator: \(error)") }
+
         do {
             let start = CFAbsoluteTimeGetCurrent()
-            let elements = try await WDAClient.shared.findElements(using: using, value: value)
+            let elements = try await client.findElements(using: using, value: value)
             // Fetch rects in parallel (best-effort)
             let rects = await withTaskGroup(of: (Int, WDAClient.ElementRect?).self) { group in
                 for (i, eid) in elements.enumerated() {
                     group.addTask {
-                        (i, try? await WDAClient.shared.getElementRect(elementId: eid))
+                        (i, try? await client.getElementRect(elementId: eid))
                     }
                 }
                 var result = [Int: WDAClient.ElementRect?]()
@@ -522,7 +542,8 @@ enum UITools {
             }
 
             // Full mode: existing behavior
-            let source = try await WDAClient.shared.getSource(format: format)
+            let client = try await wda()
+            let source = try await client.getSource(format: format)
             let elapsed = String(format: "%.1f", CFAbsoluteTimeGetCurrent() - start)
             let elementCount = source.components(separatedBy: "\"type\"").count - 1
             Task { guard let udid = await SimStateCache.currentUDID() else { return }
@@ -535,4 +556,3 @@ enum UITools {
     }
 
 }
-

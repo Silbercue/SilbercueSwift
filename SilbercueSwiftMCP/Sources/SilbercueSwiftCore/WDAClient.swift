@@ -27,9 +27,14 @@ public enum WDABackend: String, Sendable {
 /// WDA runs on http://localhost:8100 by default.
 /// Supports both SilbercueWDA and Original WDA with automatic fallback.
 public actor WDAClient {
+    /// Legacy singleton — use WDAClientManager.client(for: udid) for multi-sim.
     public static let shared = WDAClient()
 
-    private var baseURL = ProcessInfo.processInfo.environment["WDA_BASE_URL"] ?? "http://localhost:8100"
+    private var baseURL: String
+    /// Port this client listens on (used for cleanup and deploy).
+    public let port: UInt16
+    /// UDID of the simulator this client is bound to. Nil for legacy singleton.
+    public let udid: String?
     private var sessionId: String?
     private var knownSessionIds: [String] = []  // Track all created sessions
 
@@ -49,6 +54,20 @@ public actor WDAClient {
     private let requestTimeout: TimeInterval = 10
     /// Quick timeout for health-check pings
     private let healthCheckTimeout: TimeInterval = 2
+
+    /// Create a WDAClient for a specific port and simulator UDID. Used by WDAClientManager for multi-sim.
+    public init(port: UInt16, udid: String) {
+        self.port = port
+        self.udid = udid
+        self.baseURL = "http://localhost:\(port)"
+    }
+
+    /// Legacy init — reads WDA_BASE_URL env var, defaults to port 8100.
+    private init() {
+        self.port = 8100
+        self.udid = nil
+        self.baseURL = ProcessInfo.processInfo.environment["WDA_BASE_URL"] ?? "http://localhost:8100"
+    }
 
     // MARK: - Configuration
 
@@ -146,14 +165,16 @@ public actor WDAClient {
     }
 
     /// Restart current backend by terminating and relaunching the xctrunner on the given simulator.
-    public func restartWDA(simulator: String = "booted") async throws {
+    /// Uses bound UDID if available, falls back to explicit parameter or "booted".
+    public func restartWDA(simulator: String? = nil) async throws {
+        let simulator = simulator ?? udid ?? "booted"
         let bid = backend.bundleId
         // Kill any lingering WDA process
         let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, bid)
 
-        // Clean up port 8100 — prevents binding conflicts when old WDA left the port occupied.
+        // Clean up port — prevents binding conflicts when old WDA left the port occupied.
         // This was previously only done in deploySilbercueWDA, causing restartWDA to fail silently.
-        await cleanupPort8100()
+        await cleanupPort(port)
 
         // Pause for clean shutdown and port release (0.5s was too short for TIME_WAIT)
         try await Task.sleep(nanoseconds: 1_000_000_000) // 1s
@@ -175,9 +196,9 @@ public actor WDAClient {
         throw WDAError.wdaRestart("\(backend.displayName) did not become ready within 10s after restart")
     }
 
-    /// Kill any process holding port 8100 to prevent binding conflicts.
-    private func cleanupPort8100() async {
-        if let result = try? await Shell.run("/usr/bin/lsof", arguments: ["-ti", ":8100"], timeout: 5),
+    /// Kill any process holding the given port to prevent binding conflicts.
+    private func cleanupPort(_ port: UInt16) async {
+        if let result = try? await Shell.run("/usr/bin/lsof", arguments: ["-ti", ":\(port)"], timeout: 5),
            result.succeeded, !result.stdout.isEmpty {
             for pidStr in result.stdout.split(separator: "\n") {
                 if let pid = Int32(pidStr.trimmingCharacters(in: .whitespaces)) {
@@ -192,13 +213,15 @@ public actor WDAClient {
     private func cleanupWDAProcesses(simulator: String) async {
         let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, WDABackend.silbercueWDA.bundleId)
         let _ = try? await Shell.xcrun(timeout: 5, "simctl", "terminate", simulator, WDABackend.originalWDA.bundleId)
-        await cleanupPort8100()
+        await cleanupPort(port)
     }
 
     /// Deploy SilbercueWDA to the simulator: build-for-testing + start via xcodebuild test.
     /// Returns true if deploy succeeded and server is healthy, false otherwise.
     /// If a deploy is already in progress, waits for it instead of starting a new one.
-    public func deploySilbercueWDA(simulator: String = "booted") async -> Bool {
+    /// Uses bound UDID if available, falls back to explicit parameter or "booted".
+    public func deploySilbercueWDA(simulator: String? = nil) async -> Bool {
+        let simulator = simulator ?? udid ?? "booted"
         // H3 fix: If another deploy is in progress, wait for it instead of triggering premature fallback.
         // Actor isolation guarantees isDeploying is checked atomically (no await before the set).
         if isDeploying {
@@ -288,8 +311,15 @@ public actor WDAClient {
             "-xctestrun", xctestrun,
             "-destination", "id=\(udid)",
         ]
+        // Pass USE_PORT so SilbercueWDATest reads the port from environment.
+        // xcodebuild propagates process env to the test runner (Appium-proven pattern).
+        let deployPort = port
         deployTask = Task.detached {
-            _ = try? await Shell.run("/usr/bin/xcrun", arguments: testArgs, timeout: 3600)
+            _ = try? await Shell.run(
+                "/usr/bin/xcrun", arguments: testArgs,
+                environment: ["USE_PORT": "\(deployPort)"],
+                timeout: 3600
+            )
         }
 
         // Step 3: Poll for server readiness (up to 30s)
@@ -351,7 +381,8 @@ public actor WDAClient {
     /// Health-check with auto-restart and fallback chain.
     /// Always tries in fixed order: healthy? → restart current → deploy SilbercueWDA → fallback Original WDA.
     /// H1 fix: Backend state is only updated AFTER confirming which backend is actually running.
-    public func ensureWDARunning(simulator: String = "booted") async throws {
+    public func ensureWDARunning(simulator: String? = nil) async throws {
+        let simulator = simulator ?? udid ?? "booted"
         // 1. Already healthy? Done — whatever backend is active, it works.
         if await isHealthy() { return }
 
