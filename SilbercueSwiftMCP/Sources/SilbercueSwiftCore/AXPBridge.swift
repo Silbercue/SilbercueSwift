@@ -253,6 +253,104 @@ public final class AXPBridge: @unchecked Sendable {
         )
     }
 
+    // MARK: - Pruned Source (for get_source)
+
+    /// Fetches the full tree and converts to pruned format — same output as UIActions.pruneTree().
+    /// Used by get_source format="pruned" via AXP instead of WDA (~30ms vs ~1100ms).
+    public func fetchTreePruned() throws -> [[String: Any]] {
+        let (elements, rootFrame) = try fetchTree()
+        return formatTreePruned(elements: elements, rootFrame: rootFrame)
+    }
+
+    /// Converts pre-fetched BulkElements to pruned format. Pure local, no XPC.
+    /// Used by fetchTreePruned() (fresh walk) and Pro cache hook (cached elements).
+    public func formatTreePruned(elements: [BulkElement], rootFrame: CGRect) -> [[String: Any]] {
+        var result: [[String: Any]] = []
+        result.reserveCapacity(elements.count / 2)
+
+        for elem in elements {
+            let wdaClass = Self.axpRoleToWDAClass(elem.role ?? "")
+            let type = wdaClass.hasPrefix("XCUIElementType")
+                ? String(wdaClass.dropFirst("XCUIElementType".count))
+                : wdaClass
+
+            let label = elem.label ?? ""
+            let identifier = elem.identifier ?? ""
+            let valueStr = elem.value
+
+            let isInteractable = Self.prunedInteractableTypes.contains(type)
+            let hasInfo = !label.isEmpty || !identifier.isEmpty || valueStr != nil
+
+            let isTopLevelContainer = type == "Application" || type == "Window"
+            let isDecorativeImage = type == "Image" && label.isEmpty
+                && (identifier == "chevron.forward" || identifier == "chevron.right"
+                    || identifier == "chevron.backward" || identifier == "checkmark"
+                    || identifier.isEmpty)
+
+            guard (isInteractable || hasInfo) && !isDecorativeImage && !isTopLevelContainer else {
+                continue
+            }
+
+            var element: [String: Any] = ["type": type]
+            if !label.isEmpty { element["label"] = label }
+            if !identifier.isEmpty { element["id"] = identifier }
+            if let v = valueStr { element["value"] = v }
+
+            let iosRect = transformFrame(elem.frame, rootFrame: rootFrame)
+            let x = Int(iosRect.origin.x.rounded())
+            let y = Int(iosRect.origin.y.rounded())
+            let w = max(1, Int(iosRect.size.width.rounded()))
+            let h = max(1, Int(iosRect.size.height.rounded()))
+            element["frame"] = ["x": x, "y": y, "w": w, "h": h]
+
+            result.append(element)
+        }
+
+        result = Self.deduplicatePrunedLabels(result)
+        result.sort {
+            let y0 = ($0["frame"] as? [String: Any])?["y"] as? Int ?? 0
+            let y1 = ($1["frame"] as? [String: Any])?["y"] as? Int ?? 0
+            return y0 < y1
+        }
+        return result
+    }
+
+    private static let prunedInteractableTypes: Set<String> = [
+        "Button", "TextField", "SecureTextField", "TextView", "StaticText",
+        "Switch", "Slider", "Cell", "NavigationBar", "Alert", "Sheet",
+        "SearchField", "Picker", "TabBar", "Link",
+    ]
+
+    /// Deduplicates labels where a parent (Button/Cell/NavBar) contains a child with the same label.
+    private static func deduplicatePrunedLabels(_ elements: [[String: Any]]) -> [[String: Any]] {
+        struct Rect { let x, y, w, h: Int }
+        var parentRects: [String: [Rect]] = [:]
+        var buttonFrameKeys = Set<String>()
+        for elem in elements {
+            let type = elem["type"] as? String ?? ""
+            if let label = elem["label"] as? String, !label.isEmpty,
+               type == "Button" || type == "Cell" || type == "NavigationBar",
+               let f = elem["frame"] as? [String: Int],
+               let x = f["x"], let y = f["y"], let w = f["w"], let h = f["h"] {
+                parentRects[label, default: []].append(Rect(x: x, y: y, w: w, h: h))
+            }
+            if type == "Button", let f = elem["frame"] as? [String: Int] {
+                buttonFrameKeys.insert("\(f["x"] ?? 0),\(f["y"] ?? 0),\(f["w"] ?? 0),\(f["h"] ?? 0)")
+            }
+        }
+        return elements.filter { elem in
+            let type = elem["type"] as? String ?? ""
+            guard type == "StaticText" || type == "Image" else { return true }
+            guard let label = elem["label"] as? String, !label.isEmpty,
+                  let rects = parentRects[label],
+                  let f = elem["frame"] as? [String: Int],
+                  let cx = f["x"], let cy = f["y"], let cw = f["w"], let ch = f["h"] else { return true }
+            return !rects.contains { p in
+                cx >= p.x && cy >= p.y && (cx + cw) <= (p.x + p.w) && (cy + ch) <= (p.y + p.h)
+            }
+        }
+    }
+
     // MARK: - Bulk Tree Walk
 
     /// Recursively walks the full tree, serializing all elements into a flat array.
@@ -339,7 +437,25 @@ public final class AXPBridge: @unchecked Sendable {
     ]
 
     private static let axpToWDAMap: [String: String] = {
-        Dictionary(wdaToAXPMap.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        var map = Dictionary(wdaToAXPMap.map { ($0.value, $0.key) }, uniquingKeysWith: { first, _ in first })
+        // AXP roles that WDA reports under a different type
+        map["AXHeading"] = "XCUIElementTypeStaticText"
+        map["AXTextArea"] = "XCUIElementTypeTextView"
+        map["AXScrollArea"] = "XCUIElementTypeScrollView"
+        map["AXPopUpButton"] = "XCUIElementTypePicker"
+        map["AXRadioButton"] = "XCUIElementTypeRadioButton"
+        map["AXCheckBox"] = "XCUIElementTypeSwitch"
+        map["AXMenuItem"] = "XCUIElementTypeMenuItem"
+        map["AXDisclosureTriangle"] = "XCUIElementTypeDisclosureTriangle"
+        map["AXProgressIndicator"] = "XCUIElementTypeProgressIndicator"
+        map["AXSegmentedControl"] = "XCUIElementTypeSegmentedControl"
+        map["AXStepper"] = "XCUIElementTypeStepper"
+        map["AXDateField"] = "XCUIElementTypeDatePicker"
+        map["AXColorWell"] = "XCUIElementTypeColorWell"
+        map["AXMap"] = "XCUIElementTypeMap"
+        map["AXWebArea"] = "XCUIElementTypeWebView"
+        map["AXActivityIndicator"] = "XCUIElementTypeActivityIndicator"
+        return map
     }()
 
     static func wdaClassToAXPRole(_ wdaClass: String) -> String {
