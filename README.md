@@ -28,7 +28,7 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Failure screenshots from xcresult | — | — | — | **Auto-exported** |
 | Code coverage per file | Basic | — | — | **Sorted, filterable** |
 | Build error diagnosis | stderr parsing | — | — | **xcresult JSON with file:line** |
-| Find element | — | 76ms | 50ms | **31ms** / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) **<1ms cached** (+ auto-scroll) |
+| Find element | — | 76ms | 50ms | **31ms** / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) **<1ms** (+ auto-scroll) |
 | Tap (coordinates) | 235ms | 470ms | 48ms | **16ms** / ![Pro](https://img.shields.io/badge/Pro-blueviolet?style=flat-square) **4ms** |
 | Swipe | 1284ms | 2685ms | 262ms | **~320ms** |
 | Double tap | — | — | — | **~60ms** |
@@ -81,7 +81,7 @@ Every app shows 2–3 permission dialogs on first launch. Other servers require 
 
 > ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **View hierarchy in ~31ms (Free) / ~5ms (Pro)** — up to 188x faster element inspection
 
-`get_source` returns the full UI tree in ~31ms (Free) or ~5ms (Pro, cached). The fastest competitor takes 44ms, most take 250ms+. This makes element inspection practically free for agents.
+`get_source` returns the full UI tree in ~31ms (Free) or ~5ms (Pro). The fastest competitor takes 44ms, most take 250ms+. This makes element inspection practically free for agents.
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Navigate in one call** — find + tap + settle + screenshot in ~380ms
 
@@ -138,8 +138,8 @@ Pro adds 9 tools and faster internals for teams and power users who need the ful
 | Build, test, sim management | 49 tools | 58 tools |
 | Screenshot | ~316ms | **~15ms (75x faster)** |
 | Structured test results (xcresult) | Yes | Yes |
-| Find element | 31ms | **<1ms cached** |
-| View hierarchy | 31ms | **~5ms cached** |
+| Find element | 31ms | **<1ms** |
+| View hierarchy | 31ms | **~5ms** |
 | Tap (coordinates) | 16ms | **4ms** |
 | Click / type / swipe / double tap / long press / drag & drop | Yes | Yes |
 | Navigate (find + tap + verify) | Yes | Yes |
