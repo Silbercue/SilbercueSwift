@@ -22,26 +22,26 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 
 | What you get | XcodeBuildMCP | Appium-MCP | iosef | SilbercueSwift |
 |---|---|---|---|---|
+| Screenshot latency | ~1127ms | ~77ms | ~83ms | **~316ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~15ms**, 75x) |
+| View hierarchy | ~259ms | ~938ms | ~44ms | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~5ms**) |
+| Find element | — | 76ms | 50ms | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **<1ms** + auto-scroll) |
+| Tap (coordinates) | 235ms | 470ms | 48ms | **16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **4ms**) |
+| Swipe | 1284ms | 2685ms | 262ms | **~320ms** |
 | Build for simulator | Yes | — | — | **Yes** |
 | Build + Run in one call | Yes (sequential) | — | — | **Yes (parallel, ~9s faster)** |
 | Structured test results | Partial | — | — | **Full xcresult JSON** |
 | Failure screenshots from xcresult | — | — | — | **Auto-exported** |
 | Code coverage per file | Basic | — | — | **Sorted, filterable** |
 | Build error diagnosis | stderr parsing | — | — | **xcresult JSON with file:line** |
-| Find element | — | 76ms | 50ms | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **<1ms** + auto-scroll) |
-| Tap (coordinates) | 235ms | 470ms | 48ms | **16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **4ms**) |
-| Swipe | 1284ms | 2685ms | 262ms | **~320ms** |
+| Navigate (find + tap + verify) | — | — | — | **1 call (~380ms)** |
 | Double tap | — | — | — | **~60ms** |
 | Drag & drop | — | Coordinates only (3 calls) | — | **Element-to-element (1 call)** |
 | Scroll to element | — | Manual swipe loop | — | **SmartScroll (1 call)** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
-| Navigate (find + tap + verify) | — | — | — | **1 call (~380ms)** |
 | Alert handling | — | Single alert | — | **3-tier search + batch accept_all** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | iOS 18 ContactsUI dialog | — | — | — | **Supported** |
 | Batch UI automation | — | — | — | **run_plan: multi-step plans with adaptive decisions** |
-| Screenshot latency | ~1127ms | ~77ms | ~83ms | **~316ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~15ms**, 75x) |
-| View hierarchy | ~259ms | ~938ms | ~44ms | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~5ms**) |
-| Console log per failed test | — | — | — | **Optional** |
 | Log filtering | Subsystem only | — | Partial | **Topic-filtered: 90% fewer tokens** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
+| Console log per failed test | — | — | — | **Optional** |
 | Wait for log pattern | — | — | — | **Regex + timeout** |
 | Visual regression | — | — | — | **Baseline + pixel diff** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | Multi-device check | — | — | — | **Dark Mode, Landscape, iPad** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
