@@ -28,30 +28,30 @@ SilbercueSwift fixes this. It parses `.xcresult` bundles — the same structured
 | Failure screenshots from xcresult | — | — | — | **Auto-exported** |
 | Code coverage per file | Basic | — | — | **Sorted, filterable** |
 | Build error diagnosis | stderr parsing | — | — | **xcresult JSON with file:line** |
-| Find element | — | 76ms | 50ms | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **<1ms** + auto-scroll) |
-| Tap (coordinates) | 235ms | 470ms | 48ms | **16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **4ms**) |
+| Find element | — | 76ms | 50ms | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **<1ms** + auto-scroll) |
+| Tap (coordinates) | 235ms | 470ms | 48ms | **16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **4ms**) |
 | Swipe | 1284ms | 2685ms | 262ms | **~320ms** |
 | Double tap | — | — | — | **~60ms** |
 | Drag & drop | — | Coordinates only (3 calls) | — | **Element-to-element (1 call)** |
-| Scroll to element | — | Manual swipe loop | — | **SmartScroll (1 call)** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
+| Scroll to element | — | Manual swipe loop | — | **SmartScroll (1 call)** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | Navigate (find + tap + verify) | — | — | — | **1 call (~380ms)** |
-| Alert handling | — | Single alert | — | **3-tier search + batch accept_all** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
+| Alert handling | — | Single alert | — | **3-tier search + batch accept_all** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | iOS 18 ContactsUI dialog | — | — | — | **Supported** |
 | Batch UI automation | — | — | — | **run_plan: multi-step plans with adaptive decisions** |
-| Screenshot latency | ~1127ms | ~77ms | ~83ms | **~316ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **~15ms**, 75x) |
-| View hierarchy | ~259ms | ~938ms | ~44ms | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **~5ms**) |
+| Screenshot latency | ~1127ms | ~77ms | ~83ms | **~316ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~15ms**, 75x) |
+| View hierarchy | ~259ms | ~938ms | ~44ms | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~5ms**) |
 | Console log per failed test | — | — | — | **Optional** |
-| Log filtering | Subsystem only | — | Partial | **Topic-filtered: 90% fewer tokens** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
+| Log filtering | Subsystem only | — | Partial | **Topic-filtered: 90% fewer tokens** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | Wait for log pattern | — | — | — | **Regex + timeout** |
-| Visual regression | — | — | — | **Baseline + pixel diff** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
-| Multi-device check | — | — | — | **Dark Mode, Landscape, iPad** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
+| Visual regression | — | — | — | **Baseline + pixel diff** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
+| Multi-device check | — | — | — | **Dark Mode, Landscape, iPad** <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | Cross-platform (Android) | — | Yes | — | — |
 | Tools | 77 (Rust) | 61 (Node.js + Appium) | 15 (Swift) | **58 (Native Swift, 8.5MB)** |
 | Cold start | ~400ms | ~1s | ~100ms | **~50ms** |
 
 ### Where SilbercueSwift really shines
 
-> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Screenshots up to 75x faster** — ~316ms (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> ~15ms)
+> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Screenshots up to 75x faster** — ~316ms (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> ~15ms)
 
 Free tier screenshots (~316ms) are faster than XcodeBuildMCP (~1127ms) and most alternatives. Pro brings latency down to ~15ms — 5x faster than Appium, 75x faster than XcodeBuildMCP. Agents can take screenshots freely without penalty at either tier.
 
@@ -63,19 +63,19 @@ When a test fails, the agent gets the error message, the exact file:line, a scre
 
 `brew install silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java, no Rust toolchain. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
 
-> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Agent reads only what matters — 90% fewer tokens, zero wasted calls** (topic filtering <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">)
+> ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Agent reads only what matters — 90% fewer tokens, zero wasted calls** (topic filtering <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">)
 
 Free tier already strips noise: 15 known noise processes are excluded at capture time, and duplicate lines are collapsed (79% I/O reduction). Pro adds topic filtering — `read_logs` categorizes lines into 8 topics and shows only app + crashes by default, with a menu: `network(87) lifecycle(12) springboard(8)`. The agent opens specific topics in one call — no guessing, no iteration.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **One call to dismiss all permission dialogs** — 3 alerts in 1 roundtrip <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **One call to dismiss all permission dialogs** — 3 alerts in 1 roundtrip <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">
 
 Every app shows 2–3 permission dialogs on first launch. Other servers require the agent to screenshot → find button → click, per dialog. `handle_alert(action: "accept_all")` clears them all in a single call, searching across SpringBoard, ContactsUI, and the active app. Free tier handles alerts individually with `accept` / `dismiss`.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Drag & drop with element IDs** — 1 call instead of 3 <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Drag & drop with element IDs** — 1 call instead of 3 <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">
 
 "Drag item A above item B" is a single call: `drag_and_drop(source_element: "el-0", target_element: "el-1")`. The competition only supports raw coordinates, forcing the agent to find both elements, extract their frames, and build a W3C Actions sequence — 3 calls minimum.
 
-> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Auto-scroll to off-screen elements** — no more manual swipe loops <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">
+> ![strong](https://img.shields.io/badge/strong-%23C0C0C0?style=flat-square) **Auto-scroll to off-screen elements** — no more manual swipe loops <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">
 
 `find_element(using: "accessibility id", value: "Save", scroll: true)` scrolls automatically until the element appears. SmartScroll handles UIKit, SwiftUI, and lazy-loaded lists — no guessing scroll direction.
 
@@ -205,16 +205,16 @@ Native input for gestures, WDA for element queries and alerts — no Appium, no 
 | Tool | Description | Latency |
 |---|---|---|
 | `handle_alert` | **Accept, dismiss, or batch-handle system & in-app alerts** | ~200ms |
-| `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (SmartScroll — 3 fallback strategies) | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **<1ms**) |
+| `find_element` / `find_elements` | Find elements by accessibility ID, predicate, class chain. **`scroll: true` auto-scrolls** until the element appears (SmartScroll — 3 fallback strategies) | **31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **<1ms**) |
 | `click_element` | Tap a UI element | **~75ms** |
-| `tap_coordinates` | Coordinate-based tap | **~16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **~4ms**) |
+| `tap_coordinates` | Coordinate-based tap | **~16ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~4ms**) |
 | `double_tap` / `long_press` | Double tap or long press at coordinates | **~60ms** / **~1s** |
 | `swipe` | Directional swipe | **~320ms** |
-| `pinch` | Zoom in/out | ~400ms <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> |
+| `pinch` | Zoom in/out | ~400ms <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> |
 | `drag_and_drop` | **Drag from source to target** — element-to-element, coordinates, or mixed. Smart defaults for reorderable lists, Kanban boards, sliders | **~1.3s** |
 | `navigate` | **Find + tap + settle + screenshot in 1 call** — saves 3-4 roundtrips | **~380ms** |
 | `type_text` / `get_text` | Type into or read from elements | ~100-300ms |
-| `get_source` | Full view hierarchy (JSON/XML) | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle"> **~5ms**) |
+| `get_source` | Full view hierarchy (JSON/XML) | **~31ms** (<img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center"> **~5ms**) |
 | `wda_status` / `wda_create_session` | WDA health check & session management | ~50-100ms |
 
 #### handle_alert — the smartest alert handler
@@ -328,13 +328,13 @@ start_log_capture(subsystem: "com.apple.SwiftUI")
 |---|---|
 | `multi_device_check` | Run visual checks across multiple simulators (Dark Mode, Landscape, iPad) — returns layout scores |
 
-### Accessibility (1 tool) <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">
+### Accessibility (1 tool) <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">
 
 | Tool | Description |
 |---|---|
 | `accessibility_check` | Render screens across Dynamic Type content size categories — detects truncation and layout issues |
 
-### Localization (1 tool) <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="middle">
+### Localization (1 tool) <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">
 
 | Tool | Description |
 |---|---|
