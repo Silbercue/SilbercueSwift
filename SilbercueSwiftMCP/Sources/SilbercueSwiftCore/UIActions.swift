@@ -261,13 +261,13 @@ public enum UIActions {
     // MARK: - Navigate
 
     /// Navigate: find target, tap, wait, screenshot. Optionally go back first.
+    /// Uses UIActions.find() for AXP-accelerated element lookup (0ms Pro / 30ms Free).
     public static func navigate(
         target: String,
         back: Bool = false,
         scroll: Bool = false,
         settleMs: Int = 300
     ) async throws -> NavigateResult {
-        let client = try await wda()
         var steps: [String] = []
 
         // Step 1: Back navigation
@@ -280,16 +280,16 @@ public enum UIActions {
             steps.append("back")
         }
 
-        // Step 2: Find target
+        // Step 2: Find target (via AXP → WDA fallback)
         let escapedTarget = target.replacingOccurrences(of: "'", with: "\\'")
-        let (elementId, swipes, _, _) = try await client.findElement(
+        let binding = try await find(
             using: "predicate string",
             value: "label == '\(escapedTarget)' OR identifier == '\(escapedTarget)'",
             scroll: scroll, direction: "auto", maxSwipes: scroll ? 10 : 0
         )
 
         // Step 3: Click
-        try await click(elementId: elementId)
+        try await click(elementId: binding.elementId)
 
         // Step 4: Settle
         try await Task.sleep(nanoseconds: UInt64(settleMs) * 1_000_000)
@@ -298,8 +298,8 @@ public enum UIActions {
         let screenshot = await ActionScreenshot.capture()
 
         return NavigateResult(
-            elementId: elementId,
-            swipes: swipes,
+            elementId: binding.elementId,
+            swipes: binding.swipes,
             screenshot: screenshot,
             steps: steps
         )
@@ -308,7 +308,42 @@ public enum UIActions {
     // MARK: - Source Tree
 
     /// Get pruned view hierarchy — flat array of interactive/labeled elements with frames.
+    /// Pro cached path: AXP + tree cache (~0-5ms) when Pro hook set.
+    /// Free AXP path: AXP direct bulk walk (~30ms) when AXP available.
+    /// WDA fallback: HTTP (~1100ms).
     public static func getSourcePruned() async throws -> [[String: Any]] {
+        // Pro cached path: handler set by Pro → cached tree, 0-5ms
+        if let handler = ProHooks.getSourceHandler {
+            let udid = try await currentUDID()
+            if let result = await handler(udid) {
+                return result
+            }
+            // Pro hook returned nil → fall through
+        }
+
+        // AXP direct path: Free tier, ~30ms
+        if AXPBridge.isAvailable {
+            do {
+                let udid = try await currentUDID()
+                let elements: [[String: Any]] = try await withCheckedThrowingContinuation { cont in
+                    DispatchQueue.global(qos: .userInteractive).async {
+                        do {
+                            let bridge = try AXPBridgeManager.bridge(for: udid)
+                            let result = try bridge.fetchTreePruned()
+                            cont.resume(returning: result)
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
+                    }
+                }
+                return elements
+            } catch {
+                Log.warn("AXP get_source failed, falling back to WDA: \(error.localizedDescription)")
+                // Fall through to WDA
+            }
+        }
+
+        // WDA fallback (~1100ms)
         let client = try await wda()
         let source = try await client.getSource(format: "json")
         guard let data = source.data(using: .utf8),
@@ -355,9 +390,63 @@ public enum UIActions {
 
     // MARK: - Back Button
 
-    /// Find back button center by walking WDA source tree.
-    /// Uses get_source (0.1s) instead of findElement (avoids 6-18s WDA implicit wait).
+    /// Find back button center via AXP (flat tree, ~30ms) or WDA fallback (~1100ms).
+    /// Looks for first Button inside NavigationBar frame in AXP flat element list.
     public static func findBackButtonCenter() async -> (x: Int, y: Int)? {
+        // AXP path: flat tree → find NavigationBar → first Button within its frame
+        if AXPBridge.isAvailable {
+            do {
+                let udid = try await currentUDID()
+                let result: (x: Int, y: Int)? = try await withCheckedThrowingContinuation { cont in
+                    DispatchQueue.global(qos: .userInteractive).async {
+                        do {
+                            let bridge = try AXPBridgeManager.bridge(for: udid)
+                            let (elements, rootFrame) = try bridge.fetchTree()
+
+                            // Find NavigationBar frame
+                            var navBarFrame: CGRect?
+                            for elem in elements {
+                                let role = elem.role ?? ""
+                                if role == "AXNavigationBar" || role == "AXHeader" {
+                                    navBarFrame = bridge.transformFrame(elem.frame, rootFrame: rootFrame)
+                                    break
+                                }
+                            }
+
+                            guard let navFrame = navBarFrame else {
+                                cont.resume(returning: nil)
+                                return
+                            }
+
+                            // Find first Button within NavigationBar frame
+                            for elem in elements {
+                                let role = elem.role ?? ""
+                                guard role == "AXButton" else { continue }
+                                let btnFrame = bridge.transformFrame(elem.frame, rootFrame: rootFrame)
+                                // Button must be within NavigationBar bounds
+                                if btnFrame.midY >= navFrame.minY && btnFrame.midY <= navFrame.maxY
+                                    && btnFrame.midX >= navFrame.minX && btnFrame.midX <= navFrame.maxX {
+                                    let cx = Int(btnFrame.midX.rounded())
+                                    let cy = Int(btnFrame.midY.rounded())
+                                    cont.resume(returning: (x: cx, y: cy))
+                                    return
+                                }
+                            }
+
+                            cont.resume(returning: nil)
+                        } catch {
+                            cont.resume(throwing: error)
+                        }
+                    }
+                }
+                if let r = result { return r }
+                // AXP found no back button → fall through to WDA
+            } catch {
+                Log.warn("AXP findBackButton failed, falling back to WDA: \(error.localizedDescription)")
+            }
+        }
+
+        // WDA fallback
         guard let client = try? await wda(),
               let source = try? await client.getSource(format: "json"),
               let data = source.data(using: .utf8),
