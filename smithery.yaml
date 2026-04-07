@@ -3,6 +3,8 @@
 startCommand:
   type: stdio
 
+deploymentUrl: https://github.com/silbercue/SilbercueSwift
+
 configSchema:
   type: object
   required: []
