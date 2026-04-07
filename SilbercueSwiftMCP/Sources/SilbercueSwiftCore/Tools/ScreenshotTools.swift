@@ -22,7 +22,14 @@ enum ScreenshotTools {
                         "description": .string("'compact' = 1x point size, JPEG 80% (~75% smaller). 'full' = native Retina resolution. Default: full"),
                     ]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Take Screenshot",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 

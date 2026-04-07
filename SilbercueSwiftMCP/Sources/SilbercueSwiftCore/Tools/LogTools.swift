@@ -495,12 +495,26 @@ enum LogTools {
                     "predicate": .object(["type": .string("string"), "description": .string("Custom NSPredicate filter. Bypasses mode logic.")]),
                     "level": .object(["type": .string("string"), "description": .string("Log level: default, info, debug. Default: debug")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Start Log Capture",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "stop_log_capture",
             description: "Stop the running log capture.",
-            inputSchema: .object(["type": .string("object"), "properties": .object([:])])
+            inputSchema: .object(["type": .string("object"), "properties": .object([:])]),
+            annotations: Tool.Annotations(
+                title: "Stop Log Capture",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "read_logs",
@@ -521,7 +535,14 @@ enum LogTools {
                     "last": .object(["type": .string("number"), "description": .string("Only return last N lines (applied after topic filtering)")]),
                     "clear": .object(["type": .string("boolean"), "description": .string("Clear buffer after reading. Default: false")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Read Logs",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "wait_for_log",
@@ -540,7 +561,14 @@ enum LogTools {
                     "subsystem": .object(["type": .string("string"), "description": .string("Filter by subsystem (used if log capture not running)")]),
                 ]),
                 "required": .array([.string("pattern")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Wait For Log Pattern",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
     ]
 

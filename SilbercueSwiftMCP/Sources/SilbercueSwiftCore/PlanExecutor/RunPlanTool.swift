@@ -43,7 +43,14 @@ public enum RunPlanTool {
                 ]),
             ]),
             "required": .array([.string("steps")]),
-        ])
+        ]),
+        annotations: Tool.Annotations(
+            title: "Execute Test Plan",
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false
+        )
     )
 
     public static let registration = ToolRegistration(tool: tool, handler: handle)
@@ -148,7 +155,14 @@ public enum RunPlanDecideTool {
                 ]),
             ]),
             "required": .array([.string("session_id"), .string("decision")]),
-        ])
+        ]),
+        annotations: Tool.Annotations(
+            title: "Resume Plan with Decision",
+            readOnlyHint: false,
+            destructiveHint: false,
+            idempotentHint: false,
+            openWorldHint: false
+        )
     )
 
     public static let registration = ToolRegistration(tool: tool, handler: handle)

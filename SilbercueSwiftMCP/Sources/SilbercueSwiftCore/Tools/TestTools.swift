@@ -21,7 +21,14 @@ public enum TestTools {
                     "filter": .object(["type": .string("string"), "description": .string("Test filter, e.g. 'MyTests/testFoo' or 'MyTests' (optional)")]),
                     "coverage": .object(["type": .string("boolean"), "description": .string("Enable code coverage collection. Default: false")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Run Tests",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 
