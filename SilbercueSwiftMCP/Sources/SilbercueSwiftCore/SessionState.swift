@@ -225,7 +225,14 @@ public actor SessionState {
                         "enum": .array([.string("set"), .string("show"), .string("clear")]),
                     ]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Set Session Defaults",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 

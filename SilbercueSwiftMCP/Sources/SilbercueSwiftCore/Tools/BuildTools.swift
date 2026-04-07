@@ -17,7 +17,14 @@ enum BuildTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "configuration": .object(["type": .string("string"), "description": .string("Build configuration (Debug/Release). Default: Debug")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Build for Simulator",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "build_run_sim",
@@ -35,7 +42,14 @@ enum BuildTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "configuration": .object(["type": .string("string"), "description": .string("Build configuration (Debug/Release). Default: Debug")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Build, Install & Launch",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "clean",
@@ -49,7 +63,14 @@ enum BuildTools {
                     "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
                     "scheme": .object(["type": .string("string"), "description": .string("Xcode scheme name. Auto-detected if omitted.")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Clean Build Artifacts",
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "discover_projects",
@@ -60,7 +81,14 @@ enum BuildTools {
                     "path": .object(["type": .string("string"), "description": .string("Directory to search in")]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Discover Xcode Projects",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "list_schemes",
@@ -73,7 +101,14 @@ enum BuildTools {
                 "properties": .object([
                     "project": .object(["type": .string("string"), "description": .string("Path to .xcodeproj or .xcworkspace. Auto-detected if omitted.")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "List Xcode Schemes",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 

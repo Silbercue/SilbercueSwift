@@ -11,7 +11,14 @@ enum SimTools {
                 "properties": .object([
                     "filter": .object(["type": .string("string"), "description": .string("Optional filter string, e.g. 'iPhone' or 'Booted'")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "List Simulators",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "boot_sim",
@@ -22,7 +29,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID")]),
                 ]),
                 "required": .array([.string("simulator")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Boot Simulator",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "shutdown_sim",
@@ -33,7 +47,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Use 'all' to shutdown all.")]),
                 ]),
                 "required": .array([.string("simulator")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Shutdown Simulator",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "install_app",
@@ -44,7 +65,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "app_path": .object(["type": .string("string"), "description": .string("Path to .app bundle. Auto-detected from last build_sim if omitted.")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Install App",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "launch_app",
@@ -55,7 +83,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Launch App",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "terminate_app",
@@ -66,7 +101,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator name or UDID. Auto-detected from booted simulator if omitted.")]),
                     "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Terminate App",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "clone_sim",
@@ -78,7 +120,14 @@ enum SimTools {
                     "name": .object(["type": .string("string"), "description": .string("Name for the cloned simulator")]),
                 ]),
                 "required": .array([.string("simulator"), .string("name")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Clone Simulator",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "erase_sim",
@@ -89,7 +138,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID, name, or 'all' to erase all simulators")]),
                 ]),
                 "required": .array([.string("simulator")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Erase Simulator",
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "delete_sim",
@@ -100,7 +156,14 @@ enum SimTools {
                     "simulator": .object(["type": .string("string"), "description": .string("Simulator UDID or name to delete")]),
                 ]),
                 "required": .array([.string("simulator")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Delete Simulator",
+                readOnlyHint: false,
+                destructiveHint: true,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "set_orientation",
@@ -122,7 +185,14 @@ enum SimTools {
                     ]),
                 ]),
                 "required": .array([.string("orientation")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Set Orientation",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "sim_status",
@@ -137,7 +207,14 @@ enum SimTools {
                     "filter": .object(["type": .string("string"), "description": .string("Optional filter string, e.g. 'iPhone' or 'Pro'")]),
                     "active_only": .object(["type": .string("boolean"), "description": .string("Show only booted simulators. Default: false")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Simulator Status",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "sim_inspect",
@@ -158,7 +235,14 @@ enum SimTools {
                     "refresh": .object(["type": .string("boolean"), "description": .string("Force fresh data from simctl + WDA. Default: false")]),
                 ]),
                 "required": .array([.string("udid")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Inspect Simulator",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 

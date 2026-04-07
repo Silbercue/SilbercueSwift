@@ -138,7 +138,14 @@ enum ConsoleTools {
                     "bundle_id": .object(["type": .string("string"), "description": .string("App bundle identifier. Auto-detected from last build_sim if omitted.")]),
                     "args": .object(["type": .string("string"), "description": .string("Space-separated launch arguments for the app")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Launch App with Console",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "read_app_console",
@@ -150,12 +157,26 @@ enum ConsoleTools {
                     "clear": .object(["type": .string("boolean"), "description": .string("Clear buffer after reading. Default: false")]),
                     "stream": .object(["type": .string("string"), "description": .string("Which stream: stdout, stderr, or both. Default: both")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Read App Console",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "stop_app_console",
             description: "Stop the app console capture and terminate the app.",
-            inputSchema: .object(["type": .string("object"), "properties": .object([:])])
+            inputSchema: .object(["type": .string("object"), "properties": .object([:])]),
+            annotations: Tool.Annotations(
+                title: "Stop App Console",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
     ]
 

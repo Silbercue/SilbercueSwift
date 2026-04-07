@@ -6,7 +6,14 @@ enum UITools {
         Tool(
             name: "wda_status",
             description: "Check if WebDriverAgent is running and reachable.",
-            inputSchema: .object(["type": .string("object"), "properties": .object([:])])
+            inputSchema: .object(["type": .string("object"), "properties": .object([:])]),
+            annotations: Tool.Annotations(
+                title: "WebDriverAgent Status",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "handle_alert",
@@ -18,7 +25,14 @@ enum UITools {
                     "button_label": .object(["type": .string("string"), "description": .string("Optional: specific button to tap (e.g. 'Allow While Using App'). If omitted, uses smart defaults.")]),
                 ]),
                 "required": .array([.string("action")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Handle Alert",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "wda_create_session",
@@ -29,7 +43,14 @@ enum UITools {
                     "bundle_id": .object(["type": .string("string"), "description": .string("Optional bundle ID to activate")]),
                     "wda_url": .object(["type": .string("string"), "description": .string("WDA base URL. Default: http://localhost:8100")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Create WDA Session",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "find_element",
@@ -44,7 +65,14 @@ enum UITools {
                     "max_swipes": .object(["type": .string("number"), "description": .string("Max scroll attempts. Default: 10")]),
                 ]),
                 "required": .array([.string("using"), .string("value")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Find Element",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "find_elements",
@@ -56,7 +84,14 @@ enum UITools {
                     "value": .object(["type": .string("string"), "description": .string("Search value")]),
                 ]),
                 "required": .array([.string("using"), .string("value")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Find Elements",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "click_element",
@@ -68,7 +103,14 @@ enum UITools {
                     "screenshot": .object(["type": .string("boolean"), "description": .string("Take inline screenshot after action. Default: false")]),
                 ]),
                 "required": .array([.string("element_id")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Click Element",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "tap_coordinates",
@@ -81,7 +123,14 @@ enum UITools {
                     "screenshot": .object(["type": .string("boolean"), "description": .string("Take inline screenshot after action. Default: false")]),
                 ]),
                 "required": .array([.string("x"), .string("y")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Tap Coordinates",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "type_text",
@@ -95,7 +144,14 @@ enum UITools {
                     "screenshot": .object(["type": .string("boolean"), "description": .string("Take inline screenshot after action. Default: false")]),
                 ]),
                 "required": .array([.string("text")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Type Text",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "get_text",
@@ -106,7 +162,14 @@ enum UITools {
                     "element_id": .object(["type": .string("string"), "description": .string("Element ID from find_element")]),
                 ]),
                 "required": .array([.string("element_id")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Get Element Text",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "get_source",
@@ -116,7 +179,14 @@ enum UITools {
                 "properties": .object([
                     "format": .object(["type": .string("string"), "description": .string("Format: json, xml, description, or pruned. 'pruned' = flat JSON array of labeled/interactive elements with compact frames. Default: json")]),
                 ]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Get View Hierarchy",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "navigate",
@@ -130,7 +200,14 @@ enum UITools {
                     "settle_ms": .object(["type": .string("number"), "description": .string("Wait time in ms after tap for animations. Default: 300")]),
                 ]),
                 "required": .array([.string("target")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Navigate",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
     ]
 

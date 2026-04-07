@@ -12,7 +12,14 @@ enum GitTools {
                     "path": .object(["type": .string("string"), "description": .string("Repository path")]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Git Status",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "git_diff",
@@ -25,7 +32,14 @@ enum GitTools {
                     "file": .object(["type": .string("string"), "description": .string("Optional specific file to diff")]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Git Diff",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "git_log",
@@ -38,7 +52,14 @@ enum GitTools {
                     "oneline": .object(["type": .string("boolean"), "description": .string("One-line format. Default: true")]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Git Log",
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "git_commit",
@@ -51,7 +72,14 @@ enum GitTools {
                     "add_all": .object(["type": .string("boolean"), "description": .string("Stage all changes before committing. Default: false")]),
                 ]),
                 "required": .array([.string("path"), .string("message")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Git Commit",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
         Tool(
             name: "git_branch",
@@ -64,7 +92,14 @@ enum GitTools {
                     "name": .object(["type": .string("string"), "description": .string("Branch name (for create/switch)")]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: Tool.Annotations(
+                title: "Git Branch",
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         ),
     ]
 
