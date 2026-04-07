@@ -31,10 +31,10 @@ I've been using Claude Code heavily for iOS development and kept hitting the sam
 
 The bottleneck is simctl. It launches a process, waits for it to settle, encodes, exits. For a tool that's called in a tight loop, it's the wrong architecture.
 
-SilbercueSwift uses CoreSimulator IOSurface — the same private API that Xcode uses internally. No process spawn, no round-trip. The result is 16–20ms per screenshot regardless of simulator state. There's a 3-tier fallback (IOSurface → ScreenCaptureKit → simctl) so it degrades gracefully if the private API breaks.
+SilbercueSwift uses CoreSimulator IOSurface — the same private API that Xcode uses internally. No process spawn, no round-trip. The result is ~15ms per screenshot (Pro) or ~316ms (Free, simctl-based — still faster than XcodeBuildMCP at ~1127ms). There's a 3-tier fallback (IOSurface → ScreenCaptureKit → simctl) so it degrades gracefully if the private API breaks.
 
 **What's in the box:**
-- 48 tools: build, test, git, sim control, UI interaction, log capture, visual diff, batch flows
+- 49 Free tools, 58 Pro tools: build, test, git, sim control, UI interaction, log capture, visual diff, batch flows
 - Native HID for tap/swipe (IndigoHID), WDA for element tree and alerts
 - Homebrew: `brew install silbercue/tap/silbercueswift`
 - MIT licensed, no Python or Node dependencies
@@ -57,13 +57,17 @@ Julian
 
 ## Benchmark-Zahlen (im Kommentar zitierbar)
 
+Gemessen: 2x Warmup, 5x Median, M3 MacBook Pro, iOS 26.4 Simulator.
+
 | Tool | Screenshot | Notes |
 |------|-----------|-------|
-| SilbercueSwift (IOSurface) | 16–20ms | 3-tier, Tier 1 |
-| SilbercueSwift (SCKit) | ~80ms | Tier 2 fallback |
-| ios-simulator-mcp | ~320ms | simctl-based |
-| XcodeBuildMCP | ~320ms | simctl-based |
-| Appium-based MCPs | 500–1500ms | process + WDA overhead |
+| SilbercueSwift Pro (IOSurface) | ~15ms | Tier 1, IOSurface API |
+| SilbercueSwift Free | ~316ms | simctl-based |
+| iosef | ~83ms | AXP-based |
+| Appium-MCP | ~77ms | WDA |
+| ios-simulator-mcp (joshuayoes) | ~413ms | simctl-based |
+| XcodeBuildMCP | ~1127ms | simctl-based |
+| Mobile-MCP | ~1462ms | simctl-based |
 
 ---
 

@@ -120,6 +120,24 @@ claude mcp add --scope user SilbercueSwift /opt/homebrew/bin/SilbercueSwift
 
 > **Note:** Use the full path (`/opt/homebrew/bin/SilbercueSwift`). Claude Code starts MCP servers without a full shell PATH, so bare command names won't be found.
 
+### Configure in Cursor
+
+Add to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "SilbercueSwift": {
+      "command": "/opt/homebrew/bin/SilbercueSwift"
+    }
+  }
+}
+```
+
+### Configure in other MCP clients (Cline, Continue, etc.)
+
+Any client that supports stdio MCP servers: point to `/opt/homebrew/bin/SilbercueSwift` with no arguments.
+
 ### Uninstall
 
 ```bash
