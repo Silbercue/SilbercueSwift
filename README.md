@@ -7,6 +7,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-published-green)](https://registry.modelcontextprotocol.io)
 [![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
+[![SilbercueSwift MCP server](https://glama.ai/mcp/servers/Silbercue/SilbercueSwift/badges/card.svg)](https://glama.ai/mcp/servers/Silbercue/SilbercueSwift)
 
 The fastest, most complete MCP server for iOS development. One Swift binary, 58 tools, zero dependencies. **SilbercueSwift has the most complete toolset of any alternative out there.**
 
