@@ -1,3 +1,7 @@
+# Smithery build artifacts
+node_modules/
+.smithery/
+
 # Build artifacts
 DerivedData/
 *.xcodeproj/xcuserdata/
