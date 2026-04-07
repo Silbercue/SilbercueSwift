@@ -475,3 +475,7 @@ Pro tools (9 additional tools + faster internals) require a [paid license](https
 ## Contributing
 
 Issues and pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## Privacy
+
+SilbercueSwift runs entirely on your Mac and collects no user data. See [PRIVACY.md](PRIVACY.md) for details.
