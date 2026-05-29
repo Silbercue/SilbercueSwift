@@ -40,4 +40,14 @@ BUGREPORT-*.md
 DIRECTORY-SUBMISSIONS.md
 iOS-ALERTS-RESEARCH-*.md
 prompt.md
-docs/marketing/CREDENTIALS.md
+
+# Marketing & internal docs — not for public repo
+docs/marketing/
+SilbercueSwiftMCP/AUDIT-FINDINGS.md
+AUDIT-FINDINGS.md
+
+# Submission screenshots (loose marketing assets)
+awesome-pr-compare.png
+cursor-directory.png
+mcpmarket-submit.png
+pulsemcp-search.png
