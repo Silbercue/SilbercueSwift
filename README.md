@@ -502,3 +502,7 @@ Issues and pull requests welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## Privacy
 
 SilbercueSwift runs entirely on your Mac and collects no user data. See [PRIVACY.md](PRIVACY.md) for details.
+
+---
+
+Automating a browser too? [Public Browser](https://github.com/Silbercue/public-browser) is the same idea for Chrome.
