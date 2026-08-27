@@ -2,12 +2,17 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/silbercue/SilbercueSwift)](https://github.com/silbercue/SilbercueSwift/releases)
 [![Free — 49 tools](https://img.shields.io/badge/Free-49_tools-brightgreen)](https://github.com/silbercue/SilbercueSwift#free-vs-pro)
-[![Pro available](https://img.shields.io/badge/Pro-58_tools-blueviolet)](https://polar.sh/silbercueswift)
+[![Pro available](https://img.shields.io/badge/Pro-58_tools-blueviolet)](https://buy.polar.sh/polar_cl_tfgJc6diWXZBODr4AG8nnl1oYPI9rJJCjuoFy0y63lJ)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-published-green)](https://registry.modelcontextprotocol.io)
 [![Platform](https://img.shields.io/badge/platform-macOS_13%2B-blue)]()
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange)](https://swift.org)
 [![SilbercueSwift MCP server](https://glama.ai/mcp/servers/Silbercue/SilbercueSwift/badges/card.svg)](https://glama.ai/mcp/servers/Silbercue/SilbercueSwift)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/coverage-dark.svg">
+  <img alt="Capabilities covered, of 19 compared: SilbercueSwift 18, XcodeBuildMCP 6, Appium-MCP 4, iosef 1" src="docs/assets/coverage-light.svg" width="820">
+</picture>
 
 The fastest, most complete MCP server for iOS development. One Swift binary, 58 tools, zero dependencies. **SilbercueSwift has the most complete toolset of any alternative out there.**
 
@@ -173,7 +178,7 @@ Pro adds 9 tools and faster internals for teams and power users who need the ful
 | Localization check | — | Multi-language + RTL |
 | Pinch / zoom | — | Yes |
 
-Pro costs 12 EUR/month. [Get a license on Polar.sh](https://polar.sh/silbercueswift), then:
+Pro costs 12 EUR/month. [Get a license on Polar.sh](https://buy.polar.sh/polar_cl_tfgJc6diWXZBODr4AG8nnl1oYPI9rJJCjuoFy0y63lJ), then:
 
 ```bash
 silbercueswift activate <YOUR-LICENSE-KEY>
@@ -488,7 +493,7 @@ No Node.js. No Python. No Appium server. No Selenium. One binary.
 
 The core binary and all 49 free tools are **MIT licensed** — see [LICENSE](LICENSE). Use them however you want, commercially or otherwise.
 
-Pro tools (9 additional tools + faster internals) require a [paid license](https://polar.sh/silbercueswift). The license validation code (`LicenseManager.swift`) is included in the source for transparency — you can see exactly what it checks and when.
+Pro tools (9 additional tools + faster internals) require a [paid license](https://buy.polar.sh/polar_cl_tfgJc6diWXZBODr4AG8nnl1oYPI9rJJCjuoFy0y63lJ). The license validation code (`LicenseManager.swift`) is included in the source for transparency — you can see exactly what it checks and when.
 
 ## Contributing
 

@@ -16,7 +16,7 @@
     "type": "git",
     "url": "https://github.com/silbercue/SilbercueSwift"
   },
-  "homepage": "https://github.com/silbercue/SilbercueSwift",
+  "homepage": "https://second-truth.com/",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"

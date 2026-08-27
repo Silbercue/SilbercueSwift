@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Silbercue/silbercueswift",
   "title": "SilbercueSwift — iOS MCP Server",
-  "description": "iOS MCP server: 55 tools, xcresult parsing, UI automation, 15ms screenshots.",
-  "websiteUrl": "https://github.com/silbercue/SilbercueSwift",
+  "description": "iOS MCP server: 49 tools free (58 with Pro), xcresult parsing, WDA UI automation, fast screenshots.",
+  "websiteUrl": "https://second-truth.com/",
   "repository": {
     "url": "https://github.com/silbercue/SilbercueSwift",
     "source": "github"
   },
-  "version": "2.0.0",
+  "version": "3.6.3",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/silbercue/SilbercueSwift/releases/download/v2.0.0/silbercueswift-v2.0.0.mcpb",
-      "fileSha256": "d21cf9289fa9dabae44b1e44f5cfccf5cd80ff33f73feab315002150716c044a",
+      "identifier": "https://github.com/silbercue/SilbercueSwift/releases/download/v3.6.3/silbercueswift-v3.6.3.mcpb",
+      "fileSha256": "PLACEHOLDER",
       "transport": {
         "type": "stdio"
       }

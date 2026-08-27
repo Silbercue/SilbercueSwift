@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="248" viewBox="0 0 820 248" role="img" aria-label="Capabilities covered out of 19: SilbercueSwift 18, XcodeBuildMCP 6, Appium-MCP 4, iosef 1">
+<rect width="820" height="248" fill="#1a1a19"/>
+<text x="24" y="32" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="17" font-weight="600" fill="#ffffff">Capabilities covered, of 19 compared</text>
+<text x="24" y="54" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12.5" fill="#c3c2b7">Every non-latency row of the comparison table below. Counts partial support as covered.</text>
+<text x="194" y="95.5" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="600" fill="#ffffff">SilbercueSwift</text>
+<rect x="208" y="76" width="511.6" height="30" rx="4" fill="#3987e5"/>
+<text x="731.6" y="95.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="600" fill="#ffffff">18</text>
+<text x="194" y="141.5" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">XcodeBuildMCP</text>
+<rect x="208" y="122" width="170.5" height="30" rx="4" fill="#54534d"/>
+<text x="390.5" y="141.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">6</text>
+<text x="194" y="187.5" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">Appium-MCP</text>
+<rect x="208" y="168" width="113.7" height="30" rx="4" fill="#54534d"/>
+<text x="333.7" y="187.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">4</text>
+<text x="194" y="233.5" text-anchor="end" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">iosef</text>
+<rect x="208" y="214" width="28.4" height="30" rx="4" fill="#54534d"/>
+<text x="248.4" y="233.5" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13.5" font-weight="400" fill="#c3c2b7">1</text>
+<line x1="208" y1="66" x2="208" y2="254" stroke="#3a3936" stroke-width="1"/>
+</svg>

@@ -55,8 +55,46 @@ jobs:
           # Compute SHA256
           SHA=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)
 
+          # MCPB bundle (zip with manifest.json at root) for the MCP Registry
+          SEMVER="${TAG_NAME#v}"
+          MCPB_DIR="mcpb-staging"
+          mkdir -p "$MCPB_DIR/server"
+          cp -R "$STAGING/SilbercueSwift" "$MCPB_DIR/server/"
+          cp -R "$STAGING/SilbercueWDA" "$MCPB_DIR/server/"
+
+          cat > "$MCPB_DIR/manifest.json" <<MANIFEST
+          {
+            "manifest_version": "0.3",
+            "name": "silbercueswift",
+            "display_name": "SilbercueSwift",
+            "version": "${SEMVER}",
+            "description": "The fastest MCP server for iOS development. xcresult parsing, WDA UI automation, structured test results.",
+            "author": { "name": "Second Truth", "url": "https://second-truth.com/" },
+            "homepage": "https://github.com/silbercue/SilbercueSwift",
+            "license": "MIT",
+            "server": {
+              "type": "binary",
+              "entry_point": "server/SilbercueSwift",
+              "mcp_config": {
+                "command": "\${__dirname}/server/SilbercueSwift",
+                "args": [],
+                "env": {}
+              }
+            },
+            "compatibility": {
+              "platforms": ["darwin"]
+            }
+          }
+          MANIFEST
+
+          MCPB="silbercueswift-${TAG_NAME}.mcpb"
+          (cd "$MCPB_DIR" && zip -qr "../$MCPB" .)
+          MCPB_SHA=$(shasum -a 256 "$MCPB" | cut -d' ' -f1)
+
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "mcpb=$MCPB" >> "$GITHUB_OUTPUT"
+          echo "mcpb_sha256=$MCPB_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Validate tarball contents
         env:
@@ -64,15 +102,26 @@ jobs:
         run: |
           tar -tzf "$TARBALL" | grep -q "SilbercueWDA/SilbercueWDA.xcodeproj/project.pbxproj"
 
+      - name: Validate MCPB bundle
+        env:
+          MCPB: ${{ steps.assets.outputs.mcpb }}
+        run: |
+          unzip -l "$MCPB" | grep -q "manifest.json"
+          unzip -l "$MCPB" | grep -q "server/SilbercueSwift"
+          unzip -p "$MCPB" manifest.json | python3 -c "import json,sys; json.load(sys.stdin)"
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ github.ref_name }}
           TARBALL: ${{ steps.assets.outputs.tarball }}
+          MCPB: ${{ steps.assets.outputs.mcpb }}
+          MCPB_SHA: ${{ steps.assets.outputs.mcpb_sha256 }}
         run: |
-          gh release create "$TAG_NAME" "$TARBALL" \
+          gh release create "$TAG_NAME" "$TARBALL" "$MCPB" \
             --title "SilbercueSwift $TAG_NAME" \
             --generate-notes
+          echo "MCPB SHA256: $MCPB_SHA"
 
       - name: Update Homebrew formula
         env:

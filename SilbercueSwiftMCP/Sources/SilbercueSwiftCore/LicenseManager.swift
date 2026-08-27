@@ -12,7 +12,7 @@ public actor LicenseManager {
     private static let validationURL = "https://api.polar.sh/v1/customer-portal/license-keys/validate"
     private static let gracePeriod: TimeInterval = 7 * 24 * 3600  // 7 days
     private static let revalidationInterval: TimeInterval = 24 * 3600  // 24 hours
-    public static let upgradeURL = "https://polar.sh/silbercue/silbercueswift-pro"
+    public static let upgradeURL = "https://buy.polar.sh/polar_cl_tfgJc6diWXZBODr4AG8nnl1oYPI9rJJCjuoFy0y63lJ"
 
     private static var licensePath: String {
         FileManager.default.homeDirectoryForCurrentUser.path + "/.silbercueswift/license.json"
