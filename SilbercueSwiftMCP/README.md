@@ -67,7 +67,7 @@ When a test fails, the agent gets the error message, the exact file:line, a scre
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Single binary, zero dependencies** — 58 tools, install in 10 seconds
 
-`brew install silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java, no Rust toolchain. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
+`brew install silbercue/silbercue/silbercueswift` — done. 8.5MB native Swift binary. No Node.js, no npm, no Appium server, no Python, no Java, no Rust toolchain. Cold start in ~50ms. The fastest way to get an iOS MCP server running.
 
 > ![killer feat](https://img.shields.io/badge/killer%20feat-%23FFD700?style=flat-square) **Agent reads only what matters — 90% fewer tokens, zero wasted calls** (topic filtering <img src="https://img.shields.io/badge/Pro-blueviolet?style=flat-square" align="center">)
 
