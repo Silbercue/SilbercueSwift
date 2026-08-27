@@ -13,7 +13,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/silbercue/SilbercueSwift/releases/download/v3.6.3/silbercueswift-v3.6.3.mcpb",
-      "fileSha256": "PLACEHOLDER",
+      "fileSha256": "3580828aac42aca3b6c4cb418c064ad48d5e605444206ce2dde1fa11be075143",
       "transport": {
         "type": "stdio"
       }
